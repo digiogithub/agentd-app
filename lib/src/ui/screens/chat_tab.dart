@@ -1,0 +1,442 @@
+// Chat view of an agentd session: transcript, pending question, composer.
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
+
+import '../../core/contracts.dart';
+import '../format.dart';
+import '../providers.dart';
+import '../theme.dart';
+import '../widgets/common.dart';
+import '../widgets/option_button.dart';
+
+class ChatTab extends ConsumerStatefulWidget {
+  const ChatTab({super.key, required this.session, required this.view, this.error, required this.composerFocus, required this.onOpenMailbox});
+  final AgentSession session;
+  final SessionView? view;
+  final Object? error;
+  final FocusNode composerFocus;
+  final VoidCallback onOpenMailbox;
+
+  @override
+  ConsumerState<ChatTab> createState() => _ChatTabState();
+}
+
+class _ChatTabState extends ConsumerState<ChatTab> {
+  final _input = TextEditingController();
+  final _scroll = ScrollController();
+  bool _sending = false;
+  int _lastCount = 0;
+
+  @override
+  void dispose() {
+    _input.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final text = _input.text.trim();
+    if (text.isEmpty || _sending) return;
+    setState(() => _sending = true);
+    try {
+      await ref.read(sessionsRepositoryProvider).prompt(widget.session, text);
+      _input.clear();
+    } catch (_) {
+      if (mounted) showToast(context, 'No se pudo enviar: el agente está ocupado o tienes un borrador pendiente');
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _choose(SessionOption o) async {
+    final p = widget.session.pending;
+    final rev = p?.revision ?? widget.view?.revision;
+    final epoch = p?.epoch ?? widget.view?.epoch;
+    if (rev == null || epoch == null) {
+      showToast(context, 'Sin revisión del menú: espera a que se actualice la vista');
+      return;
+    }
+    try {
+      await ref.read(sessionsRepositoryProvider).choose(widget.session, o, revision: rev, epoch: epoch);
+    } catch (_) {
+      if (mounted) showToast(context, 'El menú cambió: revisa la pregunta actualizada');
+    }
+  }
+
+  void _scrollToEndIfGrown(int count) {
+    if (count == _lastCount) return;
+    _lastCount = count;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scroll.hasClients) _scroll.jumpTo(_scroll.position.maxScrollExtent);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final view = widget.view;
+    final items = view?.items ?? const <ChatItem>[];
+    final pending = widget.session.pending;
+    final inbox = ref.watch(inboxProvider(widget.session.hostId)).value ?? const <MailMessage>[];
+    final queued = inbox.where((m) => m.to == widget.session.name && m.state == MailState.queued).length;
+    _scrollToEndIfGrown(items.length + (pending == null ? 0 : 1));
+
+    final children = <Widget>[];
+    for (var i = 0; i < items.length; i++) {
+      if (i > 0) {
+        final tight = items[i].role == ChatRole.tool && items[i - 1].role != ChatRole.user;
+        children.add(SizedBox(height: tight ? 8 : 14));
+      }
+      children.add(ChatItemView(item: items[i]));
+    }
+    if (pending != null) {
+      if (children.isNotEmpty) children.add(const SizedBox(height: 14));
+      children.add(
+        PendingCard(
+          key: ValueKey('pending-${pending.revision}-${pending.question}'),
+          pending: pending,
+          onAnswer: _choose,
+          onWriteOther: () => widget.composerFocus.requestFocus(),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        Expanded(
+          child: view == null && widget.error == null
+              ? const Center(child: CircularProgressIndicator())
+              : widget.error != null && view == null
+              ? Center(
+                  child: Text('No se pudo cargar la vista', style: AppText.body.copyWith(color: AppColors.danger)),
+                )
+              : ListView(controller: _scroll, padding: const EdgeInsets.fromLTRB(16, 16, 16, 8), children: children),
+        ),
+        Container(
+          decoration: const BoxDecoration(
+            border: Border(top: BorderSide(color: AppColors.divider)),
+          ),
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (queued > 0)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(6, 0, 0, 8),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.schedule, size: 14, color: AppColors.muted),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          '${queued == 1 ? '1 mensaje en cola' : '$queued mensajes en cola'}: se entrega cuando el agente quede libre',
+                          style: AppText.caption,
+                        ),
+                      ),
+                      Semantics(
+                        container: true,
+                        button: true,
+                        label: 'Ver mensajes en cola',
+                        excludeSemantics: true,
+                        child: InkWell(
+                          onTap: widget.onOpenMailbox,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minHeight: 44, minWidth: 44),
+                            child: Center(
+                              child: Text('Ver', style: AppFonts.inter(size: 12, color: AppColors.accent)),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  RoundIconButton(
+                    icon: Icons.add,
+                    label: 'Adjuntar imagen',
+                    bg: AppColors.surface,
+                    border: AppColors.border,
+                    fg: AppColors.secondary,
+                    iconSize: 20,
+                    onPressed: () => showToast(context, 'Adjuntar imágenes llegará pronto'),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      key: const ValueKey('composer'),
+                      controller: _input,
+                      focusNode: widget.composerFocus,
+                      minLines: 1,
+                      maxLines: 5,
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => _send(),
+                      style: AppFonts.inter(size: 14.5),
+                      decoration:
+                          AppTextField.decoration(
+                            hint: 'Mensaje, / comandos, @ ficheros',
+                            radius: 22,
+                            padding: const EdgeInsets.fromLTRB(16, 12, 6, 12),
+                          ).copyWith(
+                            semanticCounterText: 'Mensaje para el agente',
+                            hintMaxLines: 1,
+                            suffixIcon: Semantics(
+                              container: true,
+                              button: true,
+                              label: 'Dictar',
+                              excludeSemantics: true,
+                              child: IconButton(
+                                icon: const Icon(Icons.mic_none, size: 18, color: AppColors.muted),
+                                onPressed: () => showToast(context, 'El dictado llegará pronto'),
+                              ),
+                            ),
+                          ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  RoundIconButton(
+                    icon: Icons.arrow_upward,
+                    label: 'Enviar',
+                    bg: AppColors.accent,
+                    fg: AppColors.bg,
+                    iconSize: 20,
+                    onPressed: _sending ? null : _send,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// One transcript entry.
+class ChatItemView extends StatelessWidget {
+  const ChatItemView({super.key, required this.item});
+  final ChatItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    switch (item.role) {
+      case ChatRole.user:
+        return Align(
+          alignment: Alignment.centerRight,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: width * 0.82),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: const BoxDecoration(
+                color: AppColors.accentBg,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(18),
+                  topRight: Radius.circular(18),
+                  bottomLeft: Radius.circular(18),
+                  bottomRight: Radius.circular(6),
+                ),
+              ),
+              child: Text(item.text, style: AppFonts.inter(size: 14.5, height: 1.45)),
+            ),
+          ),
+        );
+      case ChatRole.agent:
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: width * 0.92),
+            child: InlineCodeText(item.text, style: AppFonts.inter(size: 14.5, height: 1.5), codeColor: AppColors.accentLight, codeSize: 13),
+          ),
+        );
+      case ChatRole.tool:
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: width * 0.92),
+            child: ToolItemView(item: item),
+          ),
+        );
+      case ChatRole.system:
+        return Center(
+          child: Text(item.text, style: AppText.caption, textAlign: TextAlign.center),
+        );
+    }
+  }
+}
+
+/// Tool call: collapsible when it has output, a plain row otherwise.
+class ToolItemView extends StatefulWidget {
+  const ToolItemView({super.key, required this.item});
+  final ChatItem item;
+
+  @override
+  State<ToolItemView> createState() => _ToolItemViewState();
+}
+
+class _ToolItemViewState extends State<ToolItemView> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final hasBody = item.text.trim().isNotEmpty;
+    final icon = switch (item.ok) {
+      true => const Icon(Icons.check, size: 16, color: AppColors.success),
+      false => const Icon(Icons.close, size: 16, color: AppColors.danger),
+      null => const Icon(Icons.description_outlined, size: 16, color: AppColors.muted),
+    };
+    final head = SizedBox(
+      height: 44,
+      child: Row(
+        children: [
+          icon,
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              item.title ?? 'herramienta',
+              style: AppFonts.mono(size: 13, color: AppColors.secondary),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (item.meta != null) ...[
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                item.meta!,
+                style: AppFonts.inter(size: 12, color: AppColors.muted),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ] else
+            const Spacer(),
+          if (hasBody) Icon(_open ? Icons.expand_less : Icons.expand_more, size: 18, color: AppColors.muted),
+        ],
+      ),
+    );
+    return Semantics(
+      container: true,
+      button: hasBody,
+      expanded: hasBody ? _open : null,
+      label: '${item.title ?? 'herramienta'}${item.meta != null ? ', ${item.meta}' : ''}${item.ok == false ? ', falló' : ''}',
+      excludeSemantics: !_open,
+      child: Material(
+        color: AppColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: hasBody ? () => setState(() => _open = !_open) : null,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                head,
+                if (_open && hasBody)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Text(item.text, style: AppFonts.mono(size: 11.5, color: AppColors.muted, height: 1.45)),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The question / permission the agent waits on, with numbered options.
+class PendingCard extends StatefulWidget {
+  const PendingCard({super.key, required this.pending, required this.onAnswer, required this.onWriteOther});
+  final PendingInteraction pending;
+  final Future<void> Function(SessionOption) onAnswer;
+  final VoidCallback onWriteOther;
+
+  @override
+  State<PendingCard> createState() => _PendingCardState();
+}
+
+class _PendingCardState extends State<PendingCard> {
+  String? _selected;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = widget.pending.options.where((o) => o.selected).firstOrNull?.id;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.pending;
+    final permission = isPermission(p);
+    final selected = p.options.where((o) => o.id == _selected).firstOrNull;
+    return Semantics(
+      container: true,
+      label: 'Pregunta del agente',
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.questionBg,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.questionBorder),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SectionLabel(pendingLabel(p), color: AppColors.waiting),
+            const SizedBox(height: 10),
+            if (permission && p.detail != null) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(10)),
+                child: Text(p.detail!, style: AppFonts.mono(size: 13, color: AppColors.text, height: 1.45)),
+              ),
+              if (p.question.isNotEmpty) const SizedBox(height: 8),
+            ],
+            if (!permission || p.detail == null || p.question.isNotEmpty)
+              permission
+                  ? Text(p.question, style: AppFonts.mono(size: 13, color: AppColors.text, height: 1.45))
+                  : InlineCodeText(p.question, style: AppFonts.inter(size: 15, weight: FontWeight.w500, height: 1.4)),
+            for (final (i, o) in p.options.indexed) ...[
+              const SizedBox(height: 10),
+              OptionButton(
+                number: '${o.index ?? i + 1}',
+                label: o.kind == OptionKind.checkbox && o.checked != null ? '${o.checked! ? '☑' : '☐'} ${o.label}' : o.label,
+                selected: o.id == _selected,
+                onTap: _busy ? null : () => setState(() => _selected = o.id),
+              ),
+            ],
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: AppButton(
+                    label: 'Responder',
+                    style: AppButtonStyle.waiting,
+                    expand: true,
+                    onPressed: selected == null || _busy
+                        ? null
+                        : () async {
+                            setState(() => _busy = true);
+                            await widget.onAnswer(selected);
+                            if (mounted) setState(() => _busy = false);
+                          },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                AppButton(label: 'Escribir otra', style: AppButtonStyle.outline, onPressed: widget.onWriteOther),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
