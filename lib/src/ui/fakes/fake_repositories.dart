@@ -121,6 +121,7 @@ class FakeSessionsRepository implements SessionsRepository {
 
   /// When set, [choose] fails with this error (to test error handling).
   Object? chooseError;
+  Object? promptError;
 
   AgentSession? byKey(String key) => _sessions[key];
 
@@ -174,6 +175,7 @@ class FakeSessionsRepository implements SessionsRepository {
   @override
   Future<void> prompt(AgentSession s, String text) async {
     calls.add(FakeCall('prompt', s.name, arg: text));
+    if (promptError != null) throw promptError!;
     _addItem(s.key, ChatItem(role: ChatRole.user, text: text));
     _update(s, status: AgentStatus.working, preview: text);
     _changes.add(null);

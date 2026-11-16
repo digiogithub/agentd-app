@@ -6,6 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/contracts.dart';
+import '../../agentd/errors.dart';
+import '../chat/chat_table_view.dart';
+import '../chat/linkified_text.dart';
+import '../chat/table_parser.dart';
 import '../format.dart';
 import '../widgets/attachments/attachment.dart';
 import '../widgets/attachments/attachment_source.dart';
@@ -76,7 +80,7 @@ class _ChatTabState extends ConsumerState<ChatTab> {
       if (mounted) {
         showToast(
           context,
-          uploading ? 'No se pudieron subir las imágenes: ${errorReason(e)}' : 'No se pudo enviar: el agente está ocupado o tienes un borrador pendiente',
+          uploading ? 'No se pudieron subir las imágenes: ${errorReason(e)}' : sendErrorMessage(e),
         );
       }
     } finally {
@@ -346,6 +350,34 @@ class _ChatTabState extends ConsumerState<ChatTab> {
   }
 }
 
+/// Toast text for a failed prompt, by the daemon's error code.
+String sendErrorMessage(Object e) {
+  final code = e is AgentdError ? e.code : '';
+  return switch (code) {
+    AgentdErrorCode.busy => _busyMessage(e is AgentdError ? e.data : null),
+    AgentdErrorCode.notReady => 'El agente está trabajando o esperando una respuesta: espera a que quede libre',
+    AgentdErrorCode.verifyFailed =>
+      'El agente no mostró el texto pegado y no se pulsó Enter. Puede haber quedado en su entrada: revisa la terminal antes de reintentar',
+    AgentdErrorCode.conflict => 'La pantalla del agente cambió: revisa la vista y reintenta',
+    AgentdErrorCode.timeout => 'El agente no responde',
+    AgentdErrorCode.exited => 'La sesión ha terminado',
+    AgentdErrorCode.invalid => 'El texto está vacío o es demasiado largo (máx. 64 KiB)',
+    _ => 'No se pudo enviar',
+  };
+}
+
+/// A busy error by its reason (`data.reason`; daemons before 0.5.1 send none).
+String _busyMessage(Object? data) {
+  final reason = data is Map ? data['reason'] : null;
+  return switch (reason) {
+    'input' => 'El agente ya tiene texto en su entrada (quizá de un envío anterior). Envíalo o bórralo en la terminal y reintenta',
+    'draft' => 'Hay un borrador sin enviar en la entrada del agente (tecleado en la terminal o pegado sin Enter). Envíalo o bórralo en la terminal',
+    'human' => 'Acabas de teclear en la terminal; espera unos segundos y reintenta',
+    'lock' => 'El agente está recibiendo otra entrada (un mensaje o acción); reintenta en un momento',
+    _ => 'Hay texto pendiente en la entrada del agente o acabas de teclear en la terminal',
+  };
+}
+
 /// Short, safe text for a failure toast (never the stack, bytes or prompt).
 String errorReason(Object e) {
   var t = e is StateError ? e.message : e.toString();
@@ -382,7 +414,7 @@ class ChatItemView extends StatelessWidget {
                   bottomRight: Radius.circular(6),
                 ),
               ),
-              child: Text(item.text, style: AppFonts.inter(size: 14.5, height: 1.45)),
+              child: LinkifiedText(item.text, style: AppFonts.inter(size: 14.5, height: 1.45)),
             ),
           ),
         );
@@ -391,7 +423,7 @@ class ChatItemView extends StatelessWidget {
           alignment: Alignment.centerLeft,
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: width * 0.92),
-            child: InlineCodeText(item.text, style: AppFonts.inter(size: 14.5, height: 1.5), codeColor: AppColors.accentLight, codeSize: 13),
+            child: _AgentText(item.text),
           ),
         );
       case ChatRole.tool:
@@ -580,6 +612,31 @@ class _PendingCardState extends State<PendingCard> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Agent text: prose with links and code, and tables as real tables.
+class _AgentText extends StatelessWidget {
+  const _AgentText(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final segs = parseChatSegments(text);
+    Widget prose(String t) => LinkifiedText(t, style: AppFonts.inter(size: 14.5, height: 1.5), codeColor: AppColors.accentLight, codeSize: 13);
+    if (segs.length <= 1 && (segs.isEmpty || segs.first is TextSegment)) return prose(text);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final (i, s) in segs.indexed) ...[
+          if (i > 0) const SizedBox(height: 8),
+          switch (s) {
+            TextSegment() => prose(s.text),
+            TableSegment() => ChatTableView(table: s.table),
+          },
+        ],
+      ],
     );
   }
 }
