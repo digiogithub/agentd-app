@@ -61,7 +61,19 @@ void main() {
       await settle(tester);
       expect(find.byType(TerminalView), findsOneWidget);
       expect(f.sessions.calls.where((c) => c.method == 'terminal').single.arg, false);
-      expect(find.text('Control: tus teclas llegan al agente. El tamaño del PTY no cambia.'), findsOneWidget);
+      expect(find.text('Control: tus teclas llegan al agente y el PTY se ajusta a esta pantalla.'), findsOneWidget);
+      // Control mode: the PTY takes the view's size.
+      final pty = f.sessions.ptys.single;
+      expect(pty.resizes, isNotEmpty);
+      expect(pty.resizes.last.$1, greaterThan(10));
+
+      // A size change (soft keyboard, rotation) is sent once, coalesced.
+      final before = pty.resizes.length;
+      tester.view.physicalSize = Size(tester.view.physicalSize.width, tester.view.physicalSize.height * 0.7);
+      addTearDown(tester.view.resetPhysicalSize);
+      await settle(tester);
+      expect(pty.resizes.length, before + 1);
+      expect(pty.resizes.last.$2, lessThan(pty.resizes[before - 1].$2));
 
       await tester.tap(find.bySemanticsLabel('Escape'));
       await tester.tap(find.bySemanticsLabel('Arriba'));
@@ -80,6 +92,16 @@ void main() {
       await tester.tap(find.text('Interrumpir'));
       await settle(tester);
       expect(f.sessions.calls.where((c) => c.method == 'interrupt'), hasLength(1));
+    });
+
+    testWidgets('observe never resizes the PTY', (tester) async {
+      final f = await pumpUi(tester, SessionScreen(session: _session('claude@webapp'), initialTab: SessionTab.terminal));
+      await settle(tester);
+      await tester.tap(find.text('Control'));
+      await settle(tester);
+      final pty = f.sessions.ptys.last;
+      expect(f.sessions.calls.where((c) => c.method == 'terminal').last.arg, true);
+      expect(pty.resizes, isEmpty);
     });
 
     testWidgets('ctrl arms a ctrl-letter from the input', (tester) async {

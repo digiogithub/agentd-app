@@ -40,7 +40,11 @@ class FakePty implements PtySession {
   void resize(int cols, int rows) {
     this.cols = cols;
     this.rows = rows;
+    resizes.add((cols, rows));
   }
+
+  /// Every size asked with [resize], oldest first.
+  final List<(int, int)> resizes = [];
 
   @override
   Future<void> close() async {

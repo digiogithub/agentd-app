@@ -62,6 +62,12 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
   bool _ctrl = false;
   String? _error;
   int _generation = 0;
+  Timer? _resizeTimer;
+  (int, int)? _sent;
+
+  /// Coalesces view size changes (soft keyboard, rotation) before the PTY is
+  /// resized: every resize makes the agent redraw its whole screen.
+  static const resizeDelay = Duration(milliseconds: 200);
 
   @override
   void initState() {
@@ -78,6 +84,7 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
   @override
   void dispose() {
     _generation++;
+    _resizeTimer?.cancel();
     _sub?.cancel();
     _pty?.close();
     _input.dispose();
@@ -101,6 +108,7 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
         return;
       }
       _pty = pty;
+      _sent = null;
       // A new attach starts with a full redraw: drop what the previous one drew.
       _terminal.write('\x1b[H\x1b[2J\x1b[3J');
       _sub = pty.stream
@@ -108,6 +116,8 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
           .transform(const Utf8Decoder(allowMalformed: true))
           .listen(_terminal.write, onError: (Object _) => _setError('Se perdió la conexión con la terminal'));
       if (_error != null) setState(() => _error = null);
+      // agentd attaches passive: in Control mode the view's size is sent now.
+      _applySize();
     } catch (_) {
       _setError('No se pudo abrir la terminal');
     }
@@ -123,9 +133,23 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
     _pty?.add(utf8.encode(data));
   }
 
-  // The local view size changes, the remote PTY keeps its size (the agent's
-  // layout is shared with other clients).
-  void _onResize(int cols, int rows, int pw, int ph) => widget.onSize?.call(cols, rows);
+  // Control mode: the PTY follows this view (the daemon gives the session the
+  // size of its most recently active client and restores the profile size
+  // when the last one detaches). Observe never resizes.
+  void _onResize(int cols, int rows, int pw, int ph) {
+    widget.onSize?.call(cols, rows);
+    if (widget.observe) return;
+    _resizeTimer?.cancel();
+    _resizeTimer = Timer(resizeDelay, _applySize);
+  }
+
+  void _applySize() {
+    final pty = _pty;
+    final size = (_terminal.viewWidth, _terminal.viewHeight);
+    if (widget.observe || pty == null || size == _sent || size.$1 < 10 || size.$2 < 3) return;
+    _sent = size;
+    pty.resize(size.$1, size.$2);
+  }
 
   // agentd translates abstract keys itself (cursor mode, profile submit);
   // the other sources are raw PTYs.
@@ -203,7 +227,7 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
                     child: TerminalView(
                       _terminal,
                       theme: terminalTheme,
-                      textStyle: TerminalStyle(fontSize: 11.5, height: 1.55, fontFamily: AppFonts.monoFamily),
+                      textStyle: TerminalStyle(fontSize: 11.5, height: 1.25, fontFamily: AppFonts.monoFamily),
                       readOnly: widget.observe,
                       keyboardAppearance: Brightness.dark,
                     ),
@@ -246,7 +270,7 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 2),
                 child: Text(
-                  control ? 'Control: tus teclas llegan al agente. El tamaño del PTY no cambia.' : 'Observar: solo lectura, nadie ve tus pulsaciones.',
+                  control ? 'Control: tus teclas llegan al agente y el PTY se ajusta a esta pantalla.' : 'Observar: solo lectura, nadie ve tus pulsaciones.',
                   style: AppFonts.inter(size: 11.5, color: AppColors.muted),
                 ),
               ),
