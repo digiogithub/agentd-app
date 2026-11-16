@@ -215,12 +215,12 @@ class ZellijAdapter implements MuxAdapter {
 
   /// Commands [launch] runs, in order.
   static List<String> launchCommands({required String session, required String cwd, required List<String> command, String? paneName}) {
-    if (command.isEmpty) throw ArgumentError('empty command');
+    // An empty command opens the mux's default shell (terminal only).
     final s = posixQuote(session);
     return [
       'zellij attach --create-background $s',
       'zellij --session $s action new-pane --cwd ${posixDir(cwd)}'
-          '${paneName == null ? '' : ' --name ${posixQuote(paneName)}'} -- ${posixJoin(command)}',
+          '${paneName == null ? '' : ' --name ${posixQuote(paneName)}'}${command.isEmpty ? '' : ' -- ${posixJoin(command)}'}',
     ];
   }
 
@@ -246,6 +246,8 @@ class ZellijAdapter implements MuxAdapter {
   @override
   Future<void> kill(String name) async {
     final q = posixQuote(name);
+    // kill-session stops a running one (fails on an exited one: ignored).
+    await shell.exec('zellij kill-session $q');
     // --force kills a running session first; deleting also drops the
     // resurrectable (EXITED) state.
     final r = await shell.exec('zellij delete-session --force $q');

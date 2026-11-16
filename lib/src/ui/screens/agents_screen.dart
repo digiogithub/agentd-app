@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/contracts.dart';
 import '../format.dart';
 import '../providers.dart';
+import '../terminate.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/session_card.dart';
@@ -45,6 +46,36 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
       if (mounted) setState(() => _busy.remove(s.key));
     }
   }
+
+  Future<void> _sessionMenu(AgentSession s) async {
+    final terminate = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(sessionTitle(s), style: AppText.caption, overflow: TextOverflow.ellipsis),
+              ),
+            ),
+            ListTile(
+              leading: Icon(Icons.delete_forever_outlined, color: AppColors.danger),
+              title: Text('Terminar', style: AppFonts.inter(size: 15, color: AppColors.danger)),
+              subtitle: Text('Forzar cierre y borrar la sesión', style: AppText.caption),
+              onTap: () => Navigator.pop(ctx, true),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (terminate == true && mounted) await confirmTerminate(context, ref, s);
+  }
+
+  void _newSession({String? hostId, String? project}) =>
+      Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => NewSessionScreen(hostId: hostId, project: project), fullscreenDialog: true));
 
   void _open(AgentSession s) => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SessionScreen(session: s)));
 
@@ -86,9 +117,22 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
       children.add(const SizedBox(height: 10));
     }
 
-    section(SessionGroup.needsAnswer, 'Necesitan respuesta', AppColors.waiting);
-    section(SessionGroup.working, 'Trabajando', AppColors.working);
-    section(SessionGroup.done, 'Listos', AppColors.muted);
+    final grouping = ref.watch(settingsProvider.select((s) => s.agentsGrouping));
+    if (grouping == AgentsGrouping.status) {
+      section(SessionGroup.needsAnswer, 'Necesitan respuesta', AppColors.waiting);
+      section(SessionGroup.working, 'Trabajando', AppColors.working);
+      section(SessionGroup.done, 'Listos', AppColors.muted);
+    } else {
+      final shown = visible.where((s) => show(groupOf(s)));
+      for (final g in groupByProject(shown)) {
+        children.add(_ProjectHeader(group: g, hostName: hosts.length > 1 ? (names[g.hostId] ?? '') : '', onAdd: () => _newSession(hostId: g.hostId, project: g.hasProject ? g.path : null)));
+        for (final s in g.sessions) {
+          children.add(const SizedBox(height: 10));
+          children.add(_card(s, names[s.hostId] ?? ''));
+        }
+        children.add(const SizedBox(height: 10));
+      }
+    }
 
     return SafeArea(
       bottom: false,
@@ -117,6 +161,13 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
                       AppTextField(hint: 'Buscar sesión', onChanged: (v) => setState(() => _query = v), semanticLabel: 'Buscar sesión'),
                       const SizedBox(height: 10),
                     ],
+                    SegmentedControl<AgentsGrouping>(
+                      height: 34,
+                      options: const [(AgentsGrouping.project, 'Proyecto'), (AgentsGrouping.status, 'Estado')],
+                      value: grouping,
+                      onChanged: (g) => ref.read(settingsProvider.notifier).update((st) => st.copyWith(agentsGrouping: g)),
+                    ),
+                    const SizedBox(height: 10),
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(
@@ -145,7 +196,7 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
             bottom: 20,
             child: AppFab(
               label: 'Nueva sesión',
-              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const NewSessionScreen(), fullscreenDialog: true)),
+              onTap: () => _newSession(),
             ),
           ),
         ],
@@ -153,7 +204,13 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
     );
   }
 
-  Widget _card(AgentSession s, String hostName) {
+  Widget _card(AgentSession s, String hostName) => GestureDetector(
+    key: ValueKey('press-${s.key}'),
+    onLongPress: () => _sessionMenu(s),
+    child: _cardBody(s, hostName),
+  );
+
+  Widget _cardBody(AgentSession s, String hostName) {
     final p = s.pending;
     if (p != null && isPermission(p)) {
       return ApprovalCard(
@@ -182,4 +239,61 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
       ),
     ),
   );
+}
+
+/// Header of a project group: directory, host, count, attention and `+`.
+class _ProjectHeader extends StatelessWidget {
+  const _ProjectHeader({required this.group, required this.hostName, required this.onAdd});
+  final ProjectGroup group;
+  final String hostName;
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    final attn = group.needsAnswer;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 8, 0, 0),
+      child: Row(
+        children: [
+          Icon(group.hasProject ? Icons.folder_outlined : Icons.folder_off_outlined, size: 18, color: AppColors.muted),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Semantics(
+              header: true,
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(text: group.label, style: group.hasProject ? AppFonts.mono(size: 13, weight: FontWeight.w600) : AppFonts.inter(size: 13, weight: FontWeight.w600)),
+                    if (hostName.isNotEmpty) TextSpan(text: '  $hostName', style: AppFonts.inter(size: 12, color: AppColors.muted)),
+                    TextSpan(text: '  · ${group.sessions.length}', style: AppFonts.inter(size: 12, color: AppColors.muted)),
+                  ],
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+          if (attn > 0) ...[
+            Semantics(
+              label: attn == 1 ? '1 sesión necesita respuesta' : '$attn sesiones necesitan respuesta',
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(color: AppColors.waitingBg, borderRadius: BorderRadius.circular(10)),
+                child: Text('$attn', style: AppFonts.inter(size: 11, weight: FontWeight.w700, color: AppColors.waiting)),
+              ),
+            ),
+            const SizedBox(width: 4),
+          ],
+          RoundIconButton(
+            icon: Icons.add,
+            label: group.hasProject ? 'Nueva sesión en ${group.label}' : 'Nueva sesión',
+            bg: AppColors.surface,
+            border: AppColors.border,
+            iconSize: 18,
+            onPressed: onAdd,
+          ),
+        ],
+      ),
+    );
+  }
 }

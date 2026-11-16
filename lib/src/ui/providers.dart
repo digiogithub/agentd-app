@@ -51,6 +51,9 @@ final hostNamesProvider = Provider<Map<String, String>>((ref) {
 
 enum ThemeChoice { dark, light, system }
 
+/// How the Agents screen groups sessions.
+enum AgentsGrouping { project, status }
+
 class MutedSession {
   const MutedSession(this.session, this.until);
   final String session;
@@ -66,6 +69,7 @@ class AppSettings {
     this.biometricApprove = true,
     this.theme = ThemeChoice.dark,
     this.muted = const [MutedSession('claude@docs', 'hasta mañana')],
+    this.agentsGrouping = AgentsGrouping.project,
   });
 
   final bool notifyWaiting;
@@ -75,6 +79,7 @@ class AppSettings {
   final bool biometricApprove;
   final ThemeChoice theme;
   final List<MutedSession> muted;
+  final AgentsGrouping agentsGrouping;
 
   AppSettings copyWith({
     bool? notifyWaiting,
@@ -84,6 +89,7 @@ class AppSettings {
     bool? biometricApprove,
     ThemeChoice? theme,
     List<MutedSession>? muted,
+    AgentsGrouping? agentsGrouping,
   }) => AppSettings(
     notifyWaiting: notifyWaiting ?? this.notifyWaiting,
     notifyTurnDone: notifyTurnDone ?? this.notifyTurnDone,
@@ -92,6 +98,7 @@ class AppSettings {
     biometricApprove: biometricApprove ?? this.biometricApprove,
     theme: theme ?? this.theme,
     muted: muted ?? this.muted,
+    agentsGrouping: agentsGrouping ?? this.agentsGrouping,
   );
 }
 
@@ -104,6 +111,7 @@ extension AppSettingsJson on AppSettings {
     'biometricApprove': biometricApprove,
     'theme': theme.name,
     'muted': [for (final m in muted) {'session': m.session, 'until': m.until}],
+    'agentsGrouping': agentsGrouping.name,
   };
 }
 
@@ -112,6 +120,7 @@ AppSettings appSettingsFromJson(Object? json, {AppSettings fallback = const AppS
   if (json is! Map) return fallback;
   bool b(String k, bool d) => json[k] is bool ? json[k] as bool : d;
   final theme = ThemeChoice.values.where((t) => t.name == json['theme']).firstOrNull ?? fallback.theme;
+  final grouping = AgentsGrouping.values.where((g) => g.name == json['agentsGrouping']).firstOrNull ?? fallback.agentsGrouping;
   final muted = <MutedSession>[];
   if (json['muted'] is List) {
     for (final m in json['muted'] as List) {
@@ -126,6 +135,7 @@ AppSettings appSettingsFromJson(Object? json, {AppSettings fallback = const AppS
     biometricApprove: b('biometricApprove', fallback.biometricApprove),
     theme: theme,
     muted: json['muted'] is List ? muted : fallback.muted,
+    agentsGrouping: grouping,
   );
 }
 

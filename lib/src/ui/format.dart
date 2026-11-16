@@ -83,3 +83,81 @@ SessionGroup groupOf(AgentSession s) {
 }
 
 String plural(int n, String one, String many) => n == 1 ? '$n $one' : '$n $many';
+
+// ---------------------------------------------------------------------------
+// Projects (Agents grouped by directory)
+// ---------------------------------------------------------------------------
+
+/// Label of the group of sessions with no project.
+const noProjectLabel = 'Sin proyecto';
+
+/// A project group of the Agents screen: one host + one directory.
+class ProjectGroup {
+  ProjectGroup({required this.hostId, required this.path, required this.label, required this.sessions});
+
+  final String hostId;
+
+  /// Directory (or project name) the group is keyed by; '' = no project.
+  final String path;
+  final String label;
+  final List<AgentSession> sessions;
+
+  String get key => '$hostId|$path';
+  bool get hasProject => path.isNotEmpty;
+  int get needsAnswer => sessions.where((s) => groupOf(s) == SessionGroup.needsAnswer).length;
+  DateTime? get latest => sessions.map((s) => s.updatedAt).whereType<DateTime>().fold<DateTime?>(null, (a, b) => a == null || b.isAfter(a) ? b : a);
+}
+
+/// Directory a session belongs to: its cwd (trailing slashes removed), else
+/// its project name, else '' (no project).
+String projectPathOf(AgentSession s) {
+  var p = (s.cwd ?? '').trim();
+  while (p.length > 1 && p.endsWith('/')) {
+    p = p.substring(0, p.length - 1);
+  }
+  if (p.isNotEmpty) return p;
+  return (s.project ?? '').trim();
+}
+
+/// `/home/u/src/api` -> `~/src/api` (the home directory guessed from the
+/// path itself: `/home/<u>`, `/Users/<u>`, `/root`).
+String shortPath(String path) {
+  final m = RegExp(r'^(/home/[^/]+|/Users/[^/]+|/root)(?=/|$)').firstMatch(path);
+  return m == null ? path : '~${path.substring(m.end)}';
+}
+
+/// Sessions grouped by host + project. Inside a group: needs-answer first,
+/// then working, then the rest by last update; groups by attention, then
+/// most recent activity, then label.
+List<ProjectGroup> groupByProject(Iterable<AgentSession> sessions) {
+  final byKey = <String, ProjectGroup>{};
+  for (final s in sessions) {
+    final path = projectPathOf(s);
+    final g = byKey.putIfAbsent(
+      '${s.hostId}|$path',
+      () => ProjectGroup(hostId: s.hostId, path: path, label: path.isEmpty ? noProjectLabel : shortPath(path), sessions: []),
+    );
+    g.sessions.add(s);
+  }
+  int rank(AgentSession s) => switch (groupOf(s)) {
+    SessionGroup.needsAnswer => 0,
+    SessionGroup.working => 1,
+    SessionGroup.done => 2,
+  };
+  int byTime(DateTime? a, DateTime? b) => (b ?? DateTime.fromMillisecondsSinceEpoch(0)).compareTo(a ?? DateTime.fromMillisecondsSinceEpoch(0));
+  for (final g in byKey.values) {
+    g.sessions.sort((a, b) {
+      final r = rank(a).compareTo(rank(b));
+      return r != 0 ? r : byTime(a.updatedAt, b.updatedAt);
+    });
+  }
+  final list = byKey.values.toList()
+    ..sort((a, b) {
+      final att = (b.needsAnswer > 0 ? 1 : 0).compareTo(a.needsAnswer > 0 ? 1 : 0);
+      if (att != 0) return att;
+      final t = byTime(a.latest, b.latest);
+      if (t != 0) return t;
+      return a.label.compareTo(b.label);
+    });
+  return list;
+}

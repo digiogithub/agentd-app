@@ -128,8 +128,9 @@ class FakeSessionsRepository implements SessionsRepository {
   @override
   Stream<List<AgentSession>> watch() => _replay(() => List<AgentSession>.unmodifiable(_sessions.values), _changes.stream);
 
-  SessionView _view(String key) {
-    final s = _sessions[key]!;
+  SessionView? _view(String key) {
+    final s = _sessions[key];
+    if (s == null) return null; // terminated while open
     final rev = _revisions[key] ?? (s.pending?.revision ?? 1);
     return SessionView(
       session: s,
@@ -144,10 +145,10 @@ class FakeSessionsRepository implements SessionsRepository {
   Stream<SessionView> view(AgentSession session) {
     final key = session.key;
     if (!_sessions.containsKey(key)) _sessions[key] = session;
-    return _replay(
+    return _replay<SessionView?>(
       () => _view(key),
       _changes.stream,
-    ).distinct((a, b) => identical(a.session, b.session) && a.items.length == b.items.length && a.revision == b.revision);
+    ).where((v) => v != null).cast<SessionView>().distinct((a, b) => identical(a.session, b.session) && a.items.length == b.items.length && a.revision == b.revision);
   }
 
   void _update(AgentSession s, {AgentStatus? status, bool clearPending = false, String? preview}) {
@@ -244,14 +245,14 @@ class FakeSessionsRepository implements SessionsRepository {
       hostId: hostId,
       source: where,
       name: switch (where) {
-        SessionSource.agentd => '$harness@$project',
+        SessionSource.agentd => '${harness.isEmpty || harness == 'bash' ? kShellHarness : harness}@${project.split('/').where((p) => p.isNotEmpty).lastOrNull ?? project}',
         SessionSource.shell => 'ssh-$project',
         _ => project,
       },
       harness: harness,
       project: project,
       status: AgentStatus.starting,
-      cwd: '~/src/$project',
+      cwd: project.startsWith('/') ? project : '~/src/$project',
       turn: 0,
       updatedAt: DateTime.now(),
     );
@@ -263,6 +264,58 @@ class FakeSessionsRepository implements SessionsRepository {
 
   @override
   Future<List<String>> projects(String hostId) async => sampleAliases[hostId] ?? const [];
+
+  /// When set, [terminate] fails with this error.
+  Object? terminateError;
+
+  @override
+  Future<void> terminate(AgentSession s) async {
+    calls.add(FakeCall('terminate', s.name));
+    if (terminateError != null) throw terminateError!;
+    _sessions.remove(s.key);
+    _items.remove(s.key);
+    _changes.add(null);
+  }
+
+  /// Folders of the in-memory host tree: path -> children (`name` enterable,
+  /// `name!` not). Home is [fakeHome]; the tree also has dirs above it.
+  static const fakeHome = '/home/demo';
+  static const fakeTree = <String, List<String>>{
+    '/': ['home', 'srv', 'tmp', 'root!'],
+    '/home': ['demo', 'other!'],
+    '/home/demo': ['src', 'docs', 'Música', '.config', '.cache'],
+    '/home/demo/src': ['webapp', 'api', 'agentd'],
+    '/home/demo/src/webapp': [],
+    '/home/demo/src/api': [],
+    '/home/demo/src/agentd': [],
+    '/home/demo/docs': [],
+    '/home/demo/Música': [],
+    '/home/demo/.config': ['agentd'],
+    '/home/demo/.config/agentd': [],
+    '/home/demo/.cache': [],
+    '/srv': ['www'],
+    '/srv/www': [],
+    '/tmp': [],
+  };
+
+  /// Paths asked to [listDir], in order.
+  final List<String> listed = [];
+
+  @override
+  Future<DirListing> listDir(String hostId, String path, {bool hidden = false}) async {
+    listed.add(path);
+    var p = path.isEmpty ? fakeHome : path;
+    while (p.length > 1 && p.endsWith('/')) {
+      p = p.substring(0, p.length - 1);
+    }
+    final kids = fakeTree[p];
+    if (kids == null) throw ListDirException(ListDirFailure.notFound, path);
+    final entries = [
+      for (final k in kids)
+        if (hidden || !k.startsWith('.')) DirEntry(k.endsWith('!') ? k.substring(0, k.length - 1) : k, enterable: !k.endsWith('!')),
+    ]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return DirListing(path: p, home: fakeHome, entries: entries);
+  }
 }
 
 class FakeMailRepository implements MailRepository {

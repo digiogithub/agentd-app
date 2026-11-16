@@ -10,6 +10,7 @@ import '../core/contracts.dart';
 import '../mux/mux.dart';
 import '../mux/quote.dart';
 import 'agentd_clients.dart';
+import 'list_dir.dart';
 import 'shell_session.dart';
 
 /// Multiplexer adapters for a host (by its capabilities).
@@ -66,6 +67,8 @@ class LiveSessionsRepository implements SessionsRepository {
     this.viewLines = 300,
     this.promptRetry = const Duration(seconds: 2),
     this.promptWait = const Duration(seconds: 90),
+    this.terminateWait = const Duration(seconds: 5),
+    this.terminatePoll = const Duration(milliseconds: 250),
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now,
        _muxFactory = mux ?? defaultMuxAdapters;
@@ -89,6 +92,11 @@ class LiveSessionsRepository implements SessionsRepository {
   /// (while the agent starts) for at most [promptWait].
   final Duration promptRetry;
   final Duration promptWait;
+
+  /// [terminate] of an agentd session: how long to wait for the killed
+  /// process to be reported exited, polling `ls` every [terminatePoll].
+  final Duration terminateWait;
+  final Duration terminatePoll;
 
   final Map<String, HostStatus> _hostStatus = {};
   final Map<String, _AgentdHost> _agentd = {};
@@ -487,7 +495,8 @@ class LiveSessionsRepository implements SessionsRepository {
 
   static const _loginShell = r'exec "${SHELL:-sh}" -l';
 
-  static List<String> _command(String harness) => harness.isEmpty || harness == 'bash' ? ['sh', '-c', _loginShell] : [harness];
+  /// Terminal only (no agent): `shell` (`bash` kept for old callers).
+  static bool _isShell(String harness) => harness.isEmpty || harness == kShellHarness || harness == 'bash';
 
   @override
   Future<AgentSession> launch({required String hostId, required SessionSource where, required String project, required String harness, String? firstPrompt}) async {
@@ -500,7 +509,31 @@ class LiveSessionsRepository implements SessionsRepository {
         final aliases = await _aliasDirs(hostId);
         final p = project.trim();
         final target = aliases.containsKey(p) ? p : await _absDir(hostId, await _dir(hostId, p));
-        final info = await c.run(target: target, harness: harness, cwd: await _home(hostId));
+        final AgentdSessionInfo info;
+        if (_isShell(harness)) {
+          // A login shell: the `shell` harness with an explicit command; its
+          // profile is `default` unless the daemon has one called `shell`.
+          var profile = 'default';
+          try {
+            if ((await c.info()).profiles.any((p) => p.name == kShellHarness)) profile = kShellHarness;
+          } catch (_) {}
+          final home = await _home(hostId);
+          Future<AgentdSessionInfo> run([String? name]) =>
+              c.run(target: target, harness: kShellHarness, name: name, cmd: const ['sh', '-c', _loginShell], profile: profile, cwd: home);
+          // Several terminals may share a project: shell@<label> taken means
+          // shell@<label>-2, -3, ...
+          AgentdSessionInfo? got;
+          for (var n = 1; got == null; n++) {
+            try {
+              got = await run(n == 1 ? null : 'shell@${_label(target)}-$n');
+            } on AgentdError catch (e) {
+              if (e.code != AgentdErrorCode.exists || n >= 50) rethrow;
+            }
+          }
+          info = got;
+        } else {
+          info = await c.run(target: target, harness: harness, cwd: await _home(hostId));
+        }
         final s = toAgentSession(info, hostId: hostId);
         _agentd[hostId]?.upsert(info);
         _notify();
@@ -513,14 +546,14 @@ class LiveSessionsRepository implements SessionsRepository {
         final shell = await _hosts.shell(hostId);
         final a = _muxFactory(shell, h).where((a) => a.source == where).firstOrNull;
         if (a == null) throw StateError('${where.name} is not available on $hostId');
-        final s = await a.launch(session: _label(project), cwd: await _dir(hostId, project), command: _command(harness), harness: harness == 'bash' ? null : harness);
+        final s = await a.launch(session: _label(project), cwd: await _dir(hostId, project), command: _isShell(harness) ? const [] : [harness], harness: _isShell(harness) ? null : harness);
         unawaited(_pollMux(hostId));
         return s;
       case SessionSource.shell:
         final shell = await _hosts.shell(hostId);
         final dir = await _dir(hostId, project);
         final cd = 'cd ${posixDir(dir)} 2>/dev/null || cd';
-        final run = harness.isEmpty || harness == 'bash' ? '' : '${posixQuote(harness)}; ';
+        final run = _isShell(harness) ? '' : '${posixQuote(harness)}; ';
         final pty = await shell.pty(command: '$cd; $run$_loginShell', cols: 100, rows: 32);
         final label = _label(project);
         var name = 'ssh-$label';
@@ -531,7 +564,7 @@ class LiveSessionsRepository implements SessionsRepository {
           hostId: hostId,
           source: SessionSource.shell,
           name: name,
-          harness: harness == 'bash' ? null : harness,
+          harness: _isShell(harness) ? null : harness,
           project: label,
           status: AgentStatus.idle,
           cwd: dir,
@@ -548,6 +581,66 @@ class LiveSessionsRepository implements SessionsRepository {
         });
         _notify();
         return s;
+    }
+  }
+
+  @override
+  Future<DirListing> listDir(String hostId, String path, {bool hidden = false}) async {
+    final shell = await _hosts.shell(hostId);
+    final r = await shell.exec(listDirScript(path, hidden: hidden));
+    return parseListDir(r.stdout, exitCode: r.exitCode, stderr: r.stderr, requested: path);
+  }
+
+  @override
+  Future<void> terminate(AgentSession s) async {
+    switch (s.source) {
+      case SessionSource.agentd:
+        final c = await _clientOf(s);
+        final live = _agentd[s.hostId]?.sessions[s.name]?.status ?? s.status;
+        if (live != AgentStatus.exited) {
+          try {
+            await c.kill(s.name, signal: 'KILL');
+          } on AgentdError catch (e) {
+            if (!e.isNotFound) rethrow;
+          }
+          await _waitExited(c, s.name);
+        }
+        try {
+          await c.rm(s.name);
+        } on AgentdError catch (e) {
+          if (!e.isNotFound) rethrow;
+        }
+        _agentd[s.hostId]
+          ?..sessions.remove(s.name)
+          ..infos.remove(s.name);
+        _notify();
+      case SessionSource.zellij:
+      case SessionSource.tmux:
+        final h = _hostStatus[s.hostId];
+        if (h == null) throw StateError('unknown host ${s.hostId}');
+        final shell = await _hosts.shell(s.hostId);
+        final a = _muxFactory(shell, h).where((a) => a.source == s.source).firstOrNull;
+        if (a == null) throw StateError('${s.source.name} is not available on ${s.hostId}');
+        await a.kill(s.name);
+        _mux[s.hostId]?.removeWhere((m) => m.key == s.key);
+        _notify();
+        unawaited(_pollMux(s.hostId));
+      case SessionSource.shell:
+        final sh = _shells.remove(s.key);
+        await sh?.close();
+        _notify();
+    }
+  }
+
+  /// Polls `ls` until [name] is exited or gone, at most [terminateWait].
+  Future<void> _waitExited(AgentdClient c, String name) async {
+    final end = DateTime.now().add(terminateWait);
+    while (true) {
+      final list = await c.ls();
+      final i = list.where((i) => i.name == name).firstOrNull;
+      if (i == null || i.state == 'exited') return;
+      if (!DateTime.now().isBefore(end)) throw StateError('$name did not exit after KILL');
+      await Future<void>.delayed(terminatePoll);
     }
   }
 

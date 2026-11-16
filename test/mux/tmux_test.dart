@@ -83,6 +83,17 @@ void main() {
       expect(sh.ptys.single.rows, 40);
     });
 
+    test('launch without a command opens the default shell', () async {
+      final sh = FakeRemoteShell();
+      await TmuxAdapter(sh, hostId: 'h').launch(session: 'api', cwd: '/srv/api', command: const []);
+      expect(
+        sh.commands.single,
+        'if tmux has-session -t =api 2>/dev/null; '
+        'then tmux new-window -t =api: -c /srv/api; '
+        'else tmux new-session -d -s api -c /srv/api; fi',
+      );
+    });
+
     test('launch', () async {
       final sh = FakeRemoteShell();
       final s = await TmuxAdapter(sh, hostId: 'h').launch(session: 'codex@api', cwd: '/srv/my api', command: ['codex', "it's"]);

@@ -131,7 +131,13 @@ void main() {
     test('kill', () async {
       final sh = FakeRemoteShell();
       await ZellijAdapter(sh, hostId: 'h').kill('s1');
-      expect(sh.commands.single, 'zellij delete-session --force s1');
+      expect(sh.commands, ['zellij kill-session s1', 'zellij delete-session --force s1']);
+    });
+
+    test('launch without a command opens the default shell pane', () async {
+      final sh = FakeRemoteShell();
+      await ZellijAdapter(sh, hostId: 'h').launch(session: 'api', cwd: '/srv/api', command: const []);
+      expect(sh.commands.last, 'zellij --session api action new-pane --cwd /srv/api');
     });
   });
 }

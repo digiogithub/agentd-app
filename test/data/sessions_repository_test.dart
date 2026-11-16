@@ -29,6 +29,7 @@ class _Mux implements MuxAdapter {
   int lists = 0;
   final List<String> attached = [];
   final List<({String session, String cwd, List<String> command})> launched = [];
+  final List<String> killed = [];
 
   @override
   Future<List<AgentSession>> list({bool withPanes = true}) async {
@@ -49,7 +50,7 @@ class _Mux implements MuxAdapter {
   }
 
   @override
-  Future<void> kill(String name) async {}
+  Future<void> kill(String name) async => killed.add(name);
 }
 
 void main() {
@@ -261,6 +262,84 @@ void main() {
     expect(d.lastArgs('run')['target'], '/home/u/src/other');
   });
 
+  test('terminal only on agentd runs the login shell with the shell harness', () async {
+    await until((l) => l.isNotEmpty);
+    d.answer('info', {'host': 'h', 'version': '0.7.0', 'pid': 1, 'epoch': 'ep1', 'profiles': [{'name': 'default', 'builtin': true}]});
+    d.on('run', (c) => c.ok(sessionInfoJson(name: 'shell@webapp', status: null, state: 'starting')));
+    final s = await repo.launch(hostId: 'h', where: SessionSource.agentd, project: '/home/u/src/webapp', harness: kShellHarness);
+    expect(s.name, 'shell@webapp');
+    final run = d.lastArgs('run');
+    expect((run['target'], run['harness'], run['profile']), ('/home/u/src/webapp', 'shell', 'default'));
+    expect(run['cmd'], ['sh', '-c', r'exec "${SHELL:-sh}" -l']);
+
+    // A daemon with a `shell` profile uses it.
+    d.answer('info', {'host': 'h', 'version': '0.7.0', 'pid': 1, 'epoch': 'ep1', 'profiles': [{'name': 'shell'}]});
+    await repo.launch(hostId: 'h', where: SessionSource.agentd, project: '/home/u/src/webapp', harness: kShellHarness);
+    expect(d.lastArgs('run')['profile'], 'shell');
+
+    // shell@webapp taken: the next free numbered name.
+    d.on('run', (c) {
+      final name = c.args['name'] as String? ?? '';
+      if (name.isEmpty || name == 'shell@webapp-2') return c.fail('session exists', code: 'exists');
+      c.ok(sessionInfoJson(name: name, status: null, state: 'starting'));
+    });
+    final s3 = await repo.launch(hostId: 'h', where: SessionSource.agentd, project: '/home/u/src/webapp', harness: kShellHarness);
+    expect(s3.name, 'shell@webapp-3');
+  });
+
+  test('terminate a running agentd session: KILL, wait until exited, rm', () async {
+    final l = await until((l) => byName(l, 'codex@api') != null);
+    var lsCalls = 0;
+    d.on('kill', (c) => c.ok(null));
+    d.on('ls', (c) {
+      lsCalls++;
+      c.ok({'sessions': [sessionInfoJson(name: 'codex@api', status: null, state: lsCalls < 3 ? 'running' : 'exited')]});
+    });
+    d.on('rm', (c) => c.ok(null));
+    await repo.terminate(byName(l, 'codex@api')!);
+    expect(d.lastArgs('kill'), {'name': 'codex@api', 'signal': 'KILL'});
+    expect(lsCalls, 3);
+    final ops = d.requests.map((r) => r['op']).where((o) => o == 'kill' || o == 'ls' || o == 'rm').toList();
+    expect(ops, ['kill', 'ls', 'ls', 'ls', 'rm']);
+    expect(d.lastArgs('rm')['name'], 'codex@api');
+    await until((l) => byName(l, 'codex@api') == null);
+  });
+
+  test('terminate an exited agentd session only removes it; a session that never exits fails', () async {
+    var l = await until((l) => byName(l, 'codex@api') != null);
+    bus!.line(ev('session.exited', session: 'codex@api', data: {'exit_code': 0}));
+    l = await until((l) => byName(l, 'codex@api')?.status == AgentStatus.exited);
+    d.on('rm', (c) => c.ok(null));
+    await repo.terminate(byName(l, 'codex@api')!);
+    expect(d.requests.where((r) => r['op'] == 'kill'), isEmpty);
+    expect(d.lastArgs('rm')['name'], 'codex@api');
+
+    d.on('kill', (c) => c.ok(null));
+    d.on('ls', (c) => c.ok({'sessions': [sessionInfoJson(name: 'claude@webapp', status: 'idle')]}));
+    await expectLater(repo.terminate(byName(l, 'claude@webapp')!), throwsA(isA<StateError>()));
+    expect(d.requests.where((r) => r['op'] == 'rm' && (r['args'] as Map)['name'] == 'claude@webapp'), isEmpty);
+  });
+
+  test('terminate a zellij session goes through the adapter', () async {
+    await repo.dispose();
+    repo = make(caps: testCaps(zellij: true));
+    final l = await until((l) => byName(l, 'main') != null);
+    await repo.terminate(byName(l, 'main')!);
+    expect(zellij.killed, ['main']);
+  });
+
+  test('listDir runs the script over the host shell and parses it', () async {
+    await until((l) => l.isNotEmpty);
+    var fail = false;
+    shell.onRun('@@agentd-ls', (_, _) => fail ? const ExecResult(4, '', '') : const ExecResult(0, '@@agentd-ls\u0000/home/u\u0000/home/u\u0000b\u00001\u0000A\u00000\u0000', ''));
+    final r = await repo.listDir('h', '', hidden: true);
+    expect(r.path, '/home/u');
+    expect(r.entries.map((e) => (e.name, e.enterable)), [('A', false), ('b', true)]);
+    expect(shell.commands.last, contains('h=1'));
+    fail = true;
+    await expectLater(repo.listDir('h', '/root'), throwsA(isA<ListDirException>().having((e) => e.failure, 'failure', ListDirFailure.noPermission)));
+  });
+
   test('projects are empty without agentd', () async {
     await repo.dispose();
     repo = make(caps: testCaps(agentd: false));
@@ -288,7 +367,7 @@ void main() {
     final launched = await repo.launch(hostId: 'h', where: SessionSource.zellij, project: 'webapp', harness: 'bash');
     expect(launched.name, 'webapp');
     expect(zellij.launched.single.cwd, '~/webapp');
-    expect(zellij.launched.single.command, ['sh', '-c', r'exec "${SHELL:-sh}" -l']);
+    expect(zellij.launched.single.command, isEmpty); // terminal only: the mux's default shell
   });
 
   test(

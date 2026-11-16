@@ -8,6 +8,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/contracts.dart';
 import '../format.dart';
 import '../providers.dart';
+import '../terminate.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'chat_tab.dart';
@@ -78,6 +79,11 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
     }
   }
 
+  Future<void> _terminate(AgentSession s) async {
+    final done = await confirmTerminate(context, ref, s);
+    if (done && mounted) Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = _session;
@@ -122,12 +128,17 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                       const SizedBox(width: 8),
                       StatusPill.status(s.status),
                       const SizedBox(width: 8),
-                      if (_tab == SessionTab.terminal)
-                        _ModeToggle(observe: _observe, onTap: () => setState(() => _observe = !_observe))
-                      else
+                      if (_tab == SessionTab.terminal) ...[
+                        _ModeToggle(observe: _observe, onTap: () => setState(() => _observe = !_observe)),
+                        const SizedBox(width: 4),
+                        _MoreMenu(onTerminate: () => _terminate(s)),
+                      ] else
                         _MoreMenu(
-                          onInterrupt: () => _run(() => repo.interrupt(s), 'No se pudo interrumpir'),
-                          onMailbox: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => MailboxScreen(hostId: s.hostId, pushed: true))),
+                          onInterrupt: _hasChat ? () => _run(() => repo.interrupt(s), 'No se pudo interrumpir') : null,
+                          onMailbox: _hasChat
+                              ? () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => MailboxScreen(hostId: s.hostId, pushed: true)))
+                              : null,
+                          onTerminate: () => _terminate(s),
                         ),
                     ],
                   ),
@@ -217,9 +228,10 @@ class _ModeToggle extends StatelessWidget {
 }
 
 class _MoreMenu extends StatelessWidget {
-  const _MoreMenu({required this.onInterrupt, required this.onMailbox});
-  final VoidCallback onInterrupt;
-  final VoidCallback onMailbox;
+  const _MoreMenu({this.onInterrupt, this.onMailbox, required this.onTerminate});
+  final VoidCallback? onInterrupt;
+  final VoidCallback? onMailbox;
+  final VoidCallback onTerminate;
 
   @override
   Widget build(BuildContext context) => RoundIconButton(
@@ -232,20 +244,31 @@ class _MoreMenu extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (onInterrupt != null)
+              ListTile(
+                leading: Icon(Icons.stop_circle_outlined, color: AppColors.danger),
+                title: Text('Interrumpir', style: AppFonts.inter(size: 15, color: AppColors.danger)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  onInterrupt!();
+                },
+              ),
+            if (onMailbox != null)
+              ListTile(
+                leading: Icon(Icons.inbox_outlined, color: AppColors.secondary),
+                title: Text('Ver buzón del host', style: AppFonts.inter(size: 15)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  onMailbox!();
+                },
+              ),
             ListTile(
-              leading: Icon(Icons.stop_circle_outlined, color: AppColors.danger),
-              title: Text('Interrumpir', style: AppFonts.inter(size: 15, color: AppColors.danger)),
+              leading: Icon(Icons.delete_forever_outlined, color: AppColors.danger),
+              title: Text('Terminar', style: AppFonts.inter(size: 15, color: AppColors.danger)),
+              subtitle: Text('Forzar cierre y borrar la sesión', style: AppText.caption),
               onTap: () {
                 Navigator.pop(ctx);
-                onInterrupt();
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.inbox_outlined, color: AppColors.secondary),
-              title: Text('Ver buzón del host', style: AppFonts.inter(size: 15)),
-              onTap: () {
-                Navigator.pop(ctx);
-                onMailbox();
+                onTerminate();
               },
             ),
           ],

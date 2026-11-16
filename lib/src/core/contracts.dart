@@ -374,6 +374,46 @@ class HostKeyPrompts {
   }
 }
 
+/// Harness name of a terminal-only session (a login shell, no agent).
+const kShellHarness = 'shell';
+
+/// One folder of a host directory listing.
+class DirEntry {
+  const DirEntry(this.name, {this.enterable = true});
+  final String name;
+
+  /// False when the user can not read or traverse it (greyed in the browser).
+  final bool enterable;
+}
+
+/// Directories inside [path] (absolute) on a host.
+class DirListing {
+  const DirListing({required this.path, required this.home, this.entries = const [], this.truncated = false});
+  final String path;
+  final String home;
+  final List<DirEntry> entries; // sorted case-insensitively
+  final bool truncated; // more folders than the listing cap
+}
+
+enum ListDirFailure { notFound, noPermission, other }
+
+/// A directory that could not be listed (`No existe` / `Sin permiso`).
+class ListDirException implements Exception {
+  ListDirException(this.failure, this.path, [this.detail = '']);
+  final ListDirFailure failure;
+  final String path;
+  final String detail;
+
+  String get message => switch (failure) {
+    ListDirFailure.notFound => 'No existe',
+    ListDirFailure.noPermission => 'Sin permiso',
+    ListDirFailure.other => 'No se pudo leer la carpeta',
+  };
+
+  @override
+  String toString() => 'ListDirException(${failure.name}, $path)';
+}
+
 abstract class SessionsRepository {
   /// All sessions of every connected host, kept live.
   Stream<List<AgentSession>> watch();
@@ -396,7 +436,18 @@ abstract class SessionsRepository {
   /// Raw terminal (agentd attach, zellij attach, tmux attach).
   Future<PtySession> terminal(AgentSession s, {int cols = 80, int rows = 24, bool observe = false});
 
+  /// [harness] [kShellHarness] (or empty) opens a terminal only: the user's
+  /// login shell in the project directory.
   Future<AgentSession> launch({required String hostId, required SessionSource where, required String project, required String harness, String? firstPrompt});
+
+  /// Force-closes and deletes [s]: agentd = KILL, wait until exited, `rm`
+  /// (an exited session only `rm`); zellij = kill + delete the session;
+  /// tmux = kill-session; SSH shell = close the channel.
+  Future<void> terminate(AgentSession s);
+
+  /// Folders inside [path] on [hostId] (empty = the home directory), one
+  /// shell script over the host. Throws [ListDirException].
+  Future<DirListing> listDir(String hostId, String path, {bool hidden = false});
 
   /// Project names offered when launching: agentd aliases (op info). Empty
   /// when the host has no agentd.

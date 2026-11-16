@@ -1,16 +1,20 @@
 import 'package:agentd_app/src/ui/app.dart';
 import 'package:agentd_app/src/ui/fakes/sample_data.dart';
+import 'package:agentd_app/src/ui/providers.dart';
 import 'package:agentd_app/src/ui/screens/agents_screen.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'helpers.dart';
 
+// The grouping by status (the toggle's `Estado` side).
+final byStatus = [initialSettingsProvider.overrideWithValue(const AppSettings(agentsGrouping: AgentsGrouping.status))];
+
 void main() {
   setUp(setUpUiTests);
 
   testWidgets('groups sessions as in the mockup', (tester) async {
-    await pumpUi(tester, const Scaffold(body: AgentsScreen()));
+    await pumpUi(tester, const Scaffold(body: AgentsScreen()), extraOverrides: byStatus, height: 1100);
     expect(find.text('Agentes'), findsOneWidget);
     expect(find.text('3 hosts · 7 sesiones'), findsOneWidget);
     expect(find.text('NECESITAN RESPUESTA · 2'), findsOneWidget);
@@ -25,7 +29,7 @@ void main() {
   });
 
   testWidgets('Permitir calls choose with the revision and epoch', (tester) async {
-    final f = await pumpUi(tester, const Scaffold(body: AgentsScreen()));
+    final f = await pumpUi(tester, const Scaffold(body: AgentsScreen()), extraOverrides: byStatus);
     await tester.tap(find.text('Permitir'));
     await settle(tester);
     final call = f.sessions.calls.singleWhere((c) => c.method == 'choose');

@@ -179,14 +179,14 @@ class TmuxAdapter implements MuxAdapter {
   /// when the session already exists. tmux runs the command string with
   /// the user's default shell.
   static String launchCommand({required String session, required String cwd, required List<String> command, String? windowName}) {
-    if (command.isEmpty) throw ArgumentError('empty command');
+    // An empty command opens the default shell (terminal only).
     final s = posixQuote(session);
     final dir = posixDir(cwd);
-    final cmd = posixQuote(posixJoin(command));
+    final cmd = command.isEmpty ? '' : ' ${posixQuote(posixJoin(command))}';
     final n = windowName == null ? '' : ' -n ${posixQuote(windowName)}';
     return 'if tmux has-session -t ${_target(session)} 2>/dev/null; '
-        'then tmux new-window -t ${posixQuote('=$session:')}$n -c $dir $cmd; '
-        'else tmux new-session -d -s $s$n -c $dir $cmd; fi';
+        'then tmux new-window -t ${posixQuote('=$session:')}$n -c $dir$cmd; '
+        'else tmux new-session -d -s $s$n -c $dir$cmd; fi';
   }
 
   @override

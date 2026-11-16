@@ -4,13 +4,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/contracts.dart';
+import '../format.dart';
 import '../providers.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'folder_browser_screen.dart';
 import 'provision_screen.dart';
 import 'session_screen.dart';
 
 enum LaunchTarget { agentd, zellij, tmux, shell }
+
+/// What to open: an agent or just a terminal (the user's login shell).
+enum OpenKind { agent, terminal }
 
 class AgentChoice {
   const AgentChoice(this.id, this.label);
@@ -24,7 +29,6 @@ const agentChoices = [
   AgentChoice('pando', 'Pando'),
   AgentChoice('opencode', 'opencode'),
   AgentChoice('gemini', 'Gemini CLI'),
-  AgentChoice('bash', 'Shell'),
 ];
 
 const _targetHints = {
@@ -34,9 +38,18 @@ const _targetHints = {
   LaunchTarget.shell: 'Shell de login por SSH sin multiplexor: solo terminal, se pierde al desconectar o al cerrar la app.',
 };
 
+const _terminalHints = {
+  LaunchTarget.agentd: 'Shell de login dentro de agentd: sobrevive a desconexiones y aparece en la lista.',
+  LaunchTarget.zellij: 'Pane nuevo con la shell por defecto de zellij, en la carpeta del proyecto.',
+  LaunchTarget.tmux: 'Ventana nueva con la shell por defecto de tmux, en la carpeta del proyecto.',
+  LaunchTarget.shell: 'Shell de login por SSH sin multiplexor: se pierde al desconectar o al cerrar la app.',
+};
+
 class NewSessionScreen extends ConsumerStatefulWidget {
-  const NewSessionScreen({super.key, this.hostId});
+  /// [hostId] and [project] (alias or absolute path) prefill the form.
+  const NewSessionScreen({super.key, this.hostId, this.project});
   final String? hostId;
+  final String? project;
 
   @override
   ConsumerState<NewSessionScreen> createState() => _NewSessionScreenState();
@@ -44,6 +57,7 @@ class NewSessionScreen extends ConsumerStatefulWidget {
 
 class _NewSessionScreenState extends ConsumerState<NewSessionScreen> {
   String? _hostId;
+  OpenKind _kind = OpenKind.agent;
   LaunchTarget _target = LaunchTarget.agentd;
   String? _project;
   String _agent = 'claude';
@@ -55,6 +69,11 @@ class _NewSessionScreenState extends ConsumerState<NewSessionScreen> {
   void initState() {
     super.initState();
     _hostId = widget.hostId;
+    final p = widget.project?.trim() ?? '';
+    if (p.isNotEmpty) {
+      _project = p;
+      _extraProjects.add(p);
+    }
   }
 
   @override
@@ -80,8 +99,24 @@ class _NewSessionScreenState extends ConsumerState<NewSessionScreen> {
     };
   }
 
-  String _name(String project, LaunchTarget target) =>
-      target == LaunchTarget.agentd ? '$_agent@$project' : '${target == LaunchTarget.shell ? 'ssh' : target.name} · $_agent en $project';
+  bool get _terminal => _kind == OpenKind.terminal;
+
+  String _name(String project, LaunchTarget target) {
+    final what = _terminal ? kShellHarness : _agent;
+    final label = project.split('/').where((p) => p.isNotEmpty).lastOrNull ?? project;
+    return target == LaunchTarget.agentd ? '$what@$label' : '${target == LaunchTarget.shell ? 'ssh' : target.name} · $what en $label';
+  }
+
+  Future<void> _browse(HostStatus host) async {
+    final path = await Navigator.of(context).push<String>(
+      MaterialPageRoute<String>(builder: (_) => FolderBrowserScreen(hostId: host.config.id, initialPath: _project != null && _project!.startsWith('/') ? _project! : '')),
+    );
+    if (path == null || !mounted) return;
+    setState(() {
+      if (!_extraProjects.contains(path)) _extraProjects.add(path);
+      _project = path;
+    });
+  }
 
   Future<void> _pickHost(List<HostStatus> hosts) async {
     final id = await showModalBottomSheet<String>(
@@ -136,8 +171,8 @@ class _NewSessionScreenState extends ConsumerState<NewSessionScreen> {
             hostId: host.config.id,
             where: SessionSource.values.byName(target.name),
             project: project,
-            harness: _agent,
-            firstPrompt: _prompt.text.trim().isEmpty ? null : _prompt.text.trim(),
+            harness: _terminal ? kShellHarness : _agent,
+            firstPrompt: _terminal || _prompt.text.trim().isEmpty ? null : _prompt.text.trim(),
           );
       if (!mounted) return;
       Navigator.of(context).pushReplacement(MaterialPageRoute<void>(builder: (_) => SessionScreen(session: s)));
@@ -168,7 +203,7 @@ class _NewSessionScreenState extends ConsumerState<NewSessionScreen> {
     }
     projects.addAll(_extraProjects.where((p) => !projects.contains(p)));
     final project = _project ?? projects.firstOrNull;
-    final installed = _agent == 'bash' || (caps?.has(_agent) ?? false);
+    final installed = _terminal || (caps?.has(_agent) ?? false);
 
     return Scaffold(
       body: SafeArea(
@@ -217,6 +252,15 @@ class _NewSessionScreenState extends ConsumerState<NewSessionScreen> {
                     ),
                   ),
                   const SizedBox(height: 18),
+                  const SectionLabel('Abrir'),
+                  const SizedBox(height: 8),
+                  SegmentedControl<OpenKind>(
+                    radio: true,
+                    options: const [(OpenKind.agent, 'Agente'), (OpenKind.terminal, 'Solo terminal')],
+                    value: _kind,
+                    onChanged: (k) => setState(() => _kind = k),
+                  ),
+                  const SizedBox(height: 18),
                   const SectionLabel('Dónde corre'),
                   const SizedBox(height: 8),
                   SegmentedControl<LaunchTarget>(
@@ -227,7 +271,7 @@ class _NewSessionScreenState extends ConsumerState<NewSessionScreen> {
                     onChanged: (t) => setState(() => _target = t),
                   ),
                   const SizedBox(height: 8),
-                  Text(_targetHints[target]!, style: AppFonts.inter(size: 12, color: AppColors.muted, height: 1.4)),
+                  Text((_terminal ? _terminalHints : _targetHints)[target]!, style: AppFonts.inter(size: 12, color: AppColors.muted, height: 1.4)),
                   const SizedBox(height: 18),
                   const SectionLabel('Proyecto'),
                   const SizedBox(height: 8),
@@ -236,7 +280,8 @@ class _NewSessionScreenState extends ConsumerState<NewSessionScreen> {
                     runSpacing: 0,
                     children: [
                       for (final p in projects)
-                        FilterPill(label: p, selected: p == project, mono: true, height: 38, radius: 10, onTap: () => setState(() => _project = p)),
+                        FilterPill(label: shortPath(p), selected: p == project, mono: true, height: 38, radius: 10, onTap: () => setState(() => _project = p)),
+                      if (host != null) _outlinePill('Explorar…', () => _browse(host), 'Explorar carpetas del host'),
                       Semantics(
                         container: true,
                         button: true,
@@ -267,6 +312,7 @@ class _NewSessionScreenState extends ConsumerState<NewSessionScreen> {
                       ),
                     ],
                   ),
+                  if (!_terminal) ...[
                   const SizedBox(height: 18),
                   const SectionLabel('Agente'),
                   const SizedBox(height: 8),
@@ -287,6 +333,7 @@ class _NewSessionScreenState extends ConsumerState<NewSessionScreen> {
                   Text('PRIMER MENSAJE (OPCIONAL)', style: AppText.sectionLabel),
                   const SizedBox(height: 6),
                   AppTextField(controller: _prompt, hint: 'Qué debe hacer el agente', semanticLabel: 'Primer mensaje'),
+                  ],
                 ],
               ),
             ),
@@ -330,11 +377,36 @@ class _NewSessionScreenState extends ConsumerState<NewSessionScreen> {
     );
   }
 
+  Widget _outlinePill(String text, VoidCallback onTap, String label) => Semantics(
+    container: true,
+    button: true,
+    label: label,
+    excludeSemantics: true,
+    child: GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        height: 44,
+        child: Center(
+          widthFactor: 1,
+          child: Container(
+            height: 38,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.accent)),
+            child: Center(
+              widthFactor: 1,
+              child: Text(text, style: AppFonts.inter(size: 13, color: AppColors.accentLight)),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
   Widget _agentTile(AgentChoice a, HostCapabilities? caps, HostStatus? host) {
     final tool = caps?.tools[a.id];
-    final isShell = a.id == 'bash';
-    final missing = !isShell && !(tool?.installed ?? false);
-    final sub = isShell ? 'bash' : (missing ? 'Instalar…' : 'instalado${tool?.version != null ? ' · ${tool!.version}' : ''}');
+    final missing = !(tool?.installed ?? false);
+    final sub = (missing ? 'Instalar…' : 'instalado${tool?.version != null ? ' · ${tool!.version}' : ''}');
     return SelectTile(
       selected: _agent == a.id,
       radio: true,
