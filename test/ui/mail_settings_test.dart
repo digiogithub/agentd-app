@@ -1,5 +1,7 @@
 import 'package:agentd_app/src/ui/screens/mailbox_screen.dart';
 import 'package:agentd_app/src/ui/screens/settings_screen.dart';
+import 'package:agentd_app/src/ui/widgets/dictation/dictation_providers.dart';
+import 'package:agentd_app/src/ui/widgets/dictation/dictation_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -67,7 +69,64 @@ void main() {
 
       await tester.tap(find.text('Sistema'));
       await tester.pump();
-      expect(find.textContaining('El tema claro llegará pronto'), findsOneWidget);
+      expect(find.textContaining('llegará pronto'), findsNothing);
+    });
+
+    testWidgets('picks and persists the dictation language', (tester) async {
+      final store = _MemStore();
+      final f = Fakes();
+      await pumpUi(
+        tester,
+        const Scaffold(body: SettingsScreen()),
+        fakes: f,
+        height: 1300,
+        extraOverrides: [
+          dictationServiceProvider.overrideWithValue(_FakeSpeech()),
+          dictationLocaleStoreProvider.overrideWithValue(store),
+        ],
+      );
+      expect(find.text('Automático'), findsOneWidget);
+      await tester.tap(find.text('Idioma del dictado'));
+      await settle(tester);
+      await tester.tap(find.text('English'));
+      await settle(tester);
+      expect(store.value, 'en_US');
+      expect(find.text('en_US'), findsOneWidget);
     });
   });
+}
+
+class _MemStore implements DictationLocaleStore {
+  String? value;
+  @override
+  Future<String?> load() async => value;
+  @override
+  Future<void> save(String? id) async => value = id;
+}
+
+class _FakeSpeech implements DictationService {
+  @override
+  Stream<DictationStatus> get status => const Stream.empty();
+  @override
+  Stream<DictationError> get errors => const Stream.empty();
+  @override
+  Future<DictationAvailability> initialize() async =>
+      DictationAvailability.available;
+  @override
+  Future<void> listen({
+    String? localeId,
+    required void Function(String, bool) onResult,
+    void Function(double)? onSoundLevel,
+  }) async {}
+  @override
+  Future<void> stop() async {}
+  @override
+  Future<void> cancel() async {}
+  @override
+  Future<List<DictationLocale>> locales() async => const [
+    DictationLocale('es_ES', 'Español'),
+    DictationLocale('en_US', 'English'),
+  ];
+  @override
+  Future<String?> systemLocaleId() async => null;
 }

@@ -8,9 +8,9 @@ import '../theme.dart';
 
 /// Uppercase section header ("NECESITAN RESPUESTA · 2").
 class SectionLabel extends StatelessWidget {
-  const SectionLabel(this.text, {super.key, this.color = AppColors.muted, this.padding = EdgeInsets.zero});
+  const SectionLabel(this.text, {super.key, this.color, this.padding = EdgeInsets.zero});
   final String text;
-  final Color color;
+  final Color? color;
   final EdgeInsets padding;
 
   @override
@@ -18,23 +18,23 @@ class SectionLabel extends StatelessWidget {
     padding: padding,
     child: Semantics(
       header: true,
-      child: Text(text.toUpperCase(), style: AppText.sectionLabel.copyWith(color: color)),
+      child: Text(text.toUpperCase(), style: AppText.sectionLabel.copyWith(color: color ?? AppColors.muted)),
     ),
   );
 }
 
 /// Small rounded tag (host capabilities, detected tools).
 class TagChip extends StatelessWidget {
-  const TagChip(this.text, {super.key, this.bg = AppColors.raised, this.fg = AppColors.secondary});
+  const TagChip(this.text, {super.key, this.bg, this.fg});
   final String text;
-  final Color bg;
-  final Color fg;
+  final Color? bg;
+  final Color? fg;
 
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-    decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
-    child: Text(text, style: AppFonts.inter(size: 12, color: fg)),
+    decoration: BoxDecoration(color: bg ?? AppColors.raised, borderRadius: BorderRadius.circular(999)),
+    child: Text(text, style: AppFonts.inter(size: 12, color: fg ?? AppColors.secondary)),
   );
 }
 
@@ -96,8 +96,8 @@ class AppCard extends StatelessWidget {
     this.onTap,
     this.padding = const EdgeInsets.all(14),
     this.radius = 18,
-    this.color = AppColors.surface,
-    this.borderColor = AppColors.border,
+    this.color,
+    this.borderColor,
     this.semanticLabel,
   });
 
@@ -105,15 +105,15 @@ class AppCard extends StatelessWidget {
   final VoidCallback? onTap;
   final EdgeInsets padding;
   final double radius;
-  final Color color;
-  final Color borderColor;
+  final Color? color;
+  final Color? borderColor;
   final String? semanticLabel;
 
   @override
   Widget build(BuildContext context) {
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(radius),
-      side: BorderSide(color: borderColor),
+      side: BorderSide(color: borderColor ?? AppColors.border),
     );
     final content = Padding(padding: padding, child: child);
     return Semantics(
@@ -121,7 +121,7 @@ class AppCard extends StatelessWidget {
       label: semanticLabel,
       button: onTap != null,
       child: Material(
-        color: color,
+        color: color ?? AppColors.surface,
         shape: shape,
         clipBehavior: Clip.antiAlias,
         child: onTap == null ? content : InkWell(onTap: onTap, child: content),
@@ -223,7 +223,7 @@ class RoundIconButton extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.bg = Colors.transparent,
-    this.fg = AppColors.text,
+    this.fg,
     this.border,
     this.size = 44,
     this.iconSize = 22,
@@ -233,7 +233,7 @@ class RoundIconButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
   final Color bg;
-  final Color fg;
+  final Color? fg;
   final Color? border;
   final double size;
   final double iconSize;
@@ -256,7 +256,7 @@ class RoundIconButton extends StatelessWidget {
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: onPressed,
-            child: Icon(icon, size: iconSize, color: fg),
+            child: Icon(icon, size: iconSize, color: fg ?? AppColors.text),
           ),
         ),
       ),
@@ -315,7 +315,7 @@ class SwitchRow extends StatelessWidget {
     constraints: const BoxConstraints(minHeight: 60),
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
     decoration: divider
-        ? const BoxDecoration(
+        ? BoxDecoration(
             border: Border(bottom: BorderSide(color: AppColors.divider)),
           )
         : null,

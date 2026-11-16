@@ -3,6 +3,7 @@
 // while the list is watched, and SSH login shells started by the app.
 
 import 'dart:async';
+import 'dart:typed_data';
 
 import '../agentd/agentd.dart';
 import '../core/contracts.dart';
@@ -65,7 +66,11 @@ class LiveSessionsRepository implements SessionsRepository {
     this.viewLines = 300,
     this.promptRetry = const Duration(seconds: 2),
     this.promptWait = const Duration(seconds: 90),
-  }) : _muxFactory = mux ?? defaultMuxAdapters;
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now,
+       _muxFactory = mux ?? defaultMuxAdapters;
+
+  final DateTime Function() _now;
 
   final HostsRepository _hosts;
   final AgentdClients _clients;
@@ -331,6 +336,50 @@ class LiveSessionsRepository implements SessionsRepository {
     final c = await _clientOf(s);
     await c.prompt(s.name, text);
     _refreshFeed(s.key, now: true);
+  }
+
+  final Map<String, String> _uploadBases = {};
+  final Set<String> _uploadDirs = {};
+  int _uploadSeq = 0;
+
+  @override
+  Future<String> uploadImage(
+    AgentSession s,
+    Uint8List bytes, {
+    required String extension,
+  }) async {
+    if (!RegExp(r'^[A-Za-z0-9]{1,5}$').hasMatch(extension)) {
+      throw ArgumentError.value(extension, 'extension');
+    }
+    final ext = extension.toLowerCase();
+    final shell = await _hosts.shell(s.hostId);
+    var base = _uploadBases[s.hostId];
+    if (base == null) {
+      var dir = '';
+      try {
+        final r = await shell.exec(
+          r'printf %s "${XDG_CACHE_HOME:-$HOME/.cache}"',
+        );
+        if (r.ok) dir = r.stdout.trim();
+      } catch (_) {}
+      if (!dir.startsWith('/')) dir = '${await _home(s.hostId)}/.cache';
+      base = _uploadBases[s.hostId] = '$dir/agentd-app/uploads';
+    }
+    final dir = '$base/${uploadDirName(s.name)}';
+    if (_uploadDirs.add('${s.hostId}|$dir')) {
+      try {
+        final r = await shell.exec(
+          'umask 077; mkdir -p ${posixQuote(dir)} && chmod 700 ${posixQuote(dir)}',
+        );
+        if (!r.ok) throw StateError(r.stderr.trim());
+      } catch (_) {
+        _uploadDirs.remove('${s.hostId}|$dir');
+        rethrow;
+      }
+    }
+    final path = '$dir/${uploadFileName(_now(), ++_uploadSeq, ext)}';
+    await shell.writeFile(path, bytes, mode: 0x180);
+    return path;
   }
 
   @override
@@ -741,4 +790,19 @@ class _Feed {
     }
     repo._notify();
   }
+}
+
+/// Directory name for a session's uploads: the session name restricted to
+/// `[A-Za-z0-9._-]` (no leading dots, so never `..`).
+String uploadDirName(String sessionName) {
+  final n = sessionName
+      .replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_')
+      .replaceFirst(RegExp(r'^\.+'), '');
+  return n.isEmpty ? 'session' : n;
+}
+
+/// `yyyyMMdd-HHmmss-<n>.<ext>`.
+String uploadFileName(DateTime t, int n, String ext) {
+  String two(int v) => v.toString().padLeft(2, '0');
+  return '${t.year.toString().padLeft(4, '0')}${two(t.month)}${two(t.day)}-${two(t.hour)}${two(t.minute)}${two(t.second)}-$n.$ext';
 }

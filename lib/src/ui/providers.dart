@@ -10,7 +10,10 @@
 //     hostKeyPromptsProvider.overrideWithValue(data.hostKeyPrompts),
 //   ], child: const AgentdApp())
 
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/contracts.dart';
 import 'fakes/fake_repositories.dart';
@@ -43,7 +46,7 @@ final hostNamesProvider = Provider<Map<String, String>>((ref) {
 });
 
 // ---------------------------------------------------------------------------
-// Local app settings (in memory for now)
+// Local app settings (persisted by SettingsStore; in memory on the fakes)
 // ---------------------------------------------------------------------------
 
 enum ThemeChoice { dark, light, system }
@@ -92,13 +95,94 @@ class AppSettings {
   );
 }
 
+extension AppSettingsJson on AppSettings {
+  Map<String, Object?> toJson() => {
+    'notifyWaiting': notifyWaiting,
+    'notifyTurnDone': notifyTurnDone,
+    'notifyExit': notifyExit,
+    'replyFromNotification': replyFromNotification,
+    'biometricApprove': biometricApprove,
+    'theme': theme.name,
+    'muted': [for (final m in muted) {'session': m.session, 'until': m.until}],
+  };
+}
+
+/// Decodes stored settings; unknown or broken fields keep [fallback]'s values.
+AppSettings appSettingsFromJson(Object? json, {AppSettings fallback = const AppSettings(muted: [])}) {
+  if (json is! Map) return fallback;
+  bool b(String k, bool d) => json[k] is bool ? json[k] as bool : d;
+  final theme = ThemeChoice.values.where((t) => t.name == json['theme']).firstOrNull ?? fallback.theme;
+  final muted = <MutedSession>[];
+  if (json['muted'] is List) {
+    for (final m in json['muted'] as List) {
+      if (m is Map && m['session'] is String && m['until'] is String) muted.add(MutedSession(m['session'] as String, m['until'] as String));
+    }
+  }
+  return AppSettings(
+    notifyWaiting: b('notifyWaiting', fallback.notifyWaiting),
+    notifyTurnDone: b('notifyTurnDone', fallback.notifyTurnDone),
+    notifyExit: b('notifyExit', fallback.notifyExit),
+    replyFromNotification: b('replyFromNotification', fallback.replyFromNotification),
+    biometricApprove: b('biometricApprove', fallback.biometricApprove),
+    theme: theme,
+    muted: json['muted'] is List ? muted : fallback.muted,
+  );
+}
+
+/// Where the settings live between runs.
+abstract class SettingsStore {
+  Future<AppSettings> load();
+  Future<void> save(AppSettings settings);
+}
+
+/// Memory only (fakes, tests): starts from the mockup defaults.
+class MemorySettingsStore implements SettingsStore {
+  MemorySettingsStore([this._s = const AppSettings()]);
+  AppSettings _s;
+  @override
+  Future<AppSettings> load() async => _s;
+  @override
+  Future<void> save(AppSettings settings) async => _s = settings;
+}
+
+/// shared_preferences, key `agentd.settings.v1` (JSON).
+class PrefsSettingsStore implements SettingsStore {
+  PrefsSettingsStore([SharedPreferencesAsync? prefs]) : _prefs = prefs ?? SharedPreferencesAsync();
+  static const key = 'agentd.settings.v1';
+  final SharedPreferencesAsync _prefs;
+
+  @override
+  Future<AppSettings> load() async {
+    try {
+      final raw = await _prefs.getString(key);
+      return appSettingsFromJson(raw == null ? null : jsonDecode(raw));
+    } catch (_) {
+      return const AppSettings(muted: []);
+    }
+  }
+
+  @override
+  Future<void> save(AppSettings settings) => _prefs.setString(key, jsonEncode(settings.toJson()));
+}
+
+final settingsStoreProvider = Provider<SettingsStore>((ref) => MemorySettingsStore());
+
+/// Settings loaded before the first frame (main.dart overrides it), so the
+/// first frame already has the right theme.
+final initialSettingsProvider = Provider<AppSettings>((ref) => const AppSettings());
+
 class SettingsNotifier extends Notifier<AppSettings> {
   @override
-  AppSettings build() => const AppSettings();
+  AppSettings build() => ref.watch(initialSettingsProvider);
 
-  void update(AppSettings Function(AppSettings) f) => state = f(state);
+  void update(AppSettings Function(AppSettings) f) => _set(f(state));
 
-  void unmute(String session) => state = state.copyWith(muted: state.muted.where((m) => m.session != session).toList());
+  void unmute(String session) => _set(state.copyWith(muted: state.muted.where((m) => m.session != session).toList()));
+
+  void _set(AppSettings s) {
+    state = s;
+    ref.read(settingsStoreProvider).save(s).catchError((Object _) {});
+  }
 }
 
 final settingsProvider = NotifierProvider<SettingsNotifier, AppSettings>(SettingsNotifier.new);

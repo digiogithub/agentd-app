@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 import '../providers.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/dictation/dictation_providers.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -69,7 +70,7 @@ class SettingsScreen extends ConsumerWidget {
           constraints: const BoxConstraints(minHeight: 52),
           padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: divider
-              ? const BoxDecoration(
+              ? BoxDecoration(
                   border: Border(bottom: BorderSide(color: AppColors.divider)),
                 )
               : null,
@@ -78,7 +79,7 @@ class SettingsScreen extends ConsumerWidget {
               Expanded(child: Text(title, style: AppFonts.inter(size: 14.5))),
               Text(value, style: AppFonts.inter(size: 12.5, color: AppColors.muted)),
               const SizedBox(width: 10),
-              const Icon(Icons.chevron_right, size: 16, color: AppColors.muted),
+              Icon(Icons.chevron_right, size: 16, color: AppColors.muted),
             ],
           ),
         ),
@@ -199,6 +200,16 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                 ]),
                 const SizedBox(height: 18),
+                const SectionLabel('Dictado'),
+                const SizedBox(height: 8),
+                group([
+                  link(
+                    'Idioma del dictado',
+                    ref.watch(dictationLocaleProvider).value ?? 'Automático',
+                    () => _pickDictationLocale(context, ref),
+                  ),
+                ]),
+                const SizedBox(height: 18),
                 const SectionLabel('Apariencia'),
                 const SizedBox(height: 8),
                 SegmentedControl<ThemeChoice>(
@@ -206,10 +217,7 @@ class SettingsScreen extends ConsumerWidget {
                   height: 40,
                   options: const [(ThemeChoice.dark, 'Oscuro'), (ThemeChoice.light, 'Claro'), (ThemeChoice.system, 'Sistema')],
                   value: s.theme,
-                  onChanged: (t) {
-                    n.update((x) => x.copyWith(theme: t));
-                    if (t != ThemeChoice.dark) showToast(context, 'El tema claro llegará pronto; de momento la app es oscura');
-                  },
+                  onChanged: (t) => n.update((x) => x.copyWith(theme: t)),
                 ),
               ],
             ),
@@ -217,5 +225,43 @@ class SettingsScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _pickDictationLocale(BuildContext context, WidgetRef ref) async {
+    final locales = await ref.read(dictationServiceProvider).locales();
+    if (!context.mounted) return;
+    if (locales.isEmpty) {
+      showToast(context, 'El dictado no está disponible en este dispositivo');
+      return;
+    }
+    final current = ref.read(dictationLocaleProvider).value;
+    final picked = await showModalBottomSheet<(String?,)>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      builder: (ctx) => ListView(
+        children: [
+          ListTile(
+            title: const Text('Automático'),
+            subtitle: const Text('Idioma del dispositivo, o español'),
+            trailing: current == null
+                ? Icon(Icons.check, color: AppColors.accent)
+                : null,
+            onTap: () => Navigator.pop(ctx, (null,)),
+          ),
+          for (final l in locales)
+            ListTile(
+              title: Text(l.name),
+              subtitle: Text(l.id),
+              trailing: l.id == current
+                  ? Icon(Icons.check, color: AppColors.accent)
+                  : null,
+              onTap: () => Navigator.pop(ctx, (l.id,)),
+            ),
+        ],
+      ),
+    );
+    if (picked != null) {
+      await ref.read(dictationLocaleProvider.notifier).choose(picked.$1);
+    }
   }
 }

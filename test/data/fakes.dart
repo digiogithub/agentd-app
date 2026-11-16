@@ -60,6 +60,8 @@ class DataShell implements RemoteShell {
   final List<String> sockets = [];
   final List<TestPty> ptys = [];
   bool _closed = false;
+  final Map<String, ({Uint8List data, int mode})> writes = {};
+  bool failWrites = false;
 
   void on(Pattern p, ExecResult r) => _rules.add((p, (_, _) => r));
   void onRun(Pattern p, ExecResult Function(String cmd, String? stdin) f) => _rules.add((p, f));
@@ -88,6 +90,16 @@ class DataShell implements RemoteShell {
     final d = daemon;
     if (d == null) return Future.error(StateError('no daemon'));
     return d.dial();
+  }
+
+  @override
+  Future<void> writeFile(
+    String path,
+    Uint8List data, {
+    int mode = 0x180,
+  }) async {
+    if (failWrites) throw StateError('disco lleno');
+    writes[path] = (data: data, mode: mode);
   }
 
   @override

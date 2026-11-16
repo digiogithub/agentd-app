@@ -79,7 +79,7 @@ class HostCard extends ConsumerWidget {
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Quitar', style: TextStyle(color: AppColors.danger)),
+            child: Text('Quitar', style: TextStyle(color: AppColors.danger)),
           ),
         ],
       ),
@@ -186,7 +186,7 @@ class HostCard extends ConsumerWidget {
                   child: Container(
                     width: 10,
                     height: 10,
-                    decoration: const BoxDecoration(color: AppColors.success, shape: BoxShape.circle),
+                    decoration: BoxDecoration(color: AppColors.success, shape: BoxShape.circle),
                   ),
                 ),
                 const SizedBox(width: 10),

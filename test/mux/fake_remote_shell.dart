@@ -15,6 +15,7 @@ class FakeRemoteShell implements RemoteShell {
   final List<String> commands = [];
   final List<({String? command, int cols, int rows})> ptys = [];
   bool _closed = false;
+  final Map<String, ({Uint8List data, int mode})> writes = {};
 
   void on(Pattern pattern, ExecResult result) => _rules.add((pattern, (_) => result));
   void onThrow(Pattern pattern, Object error) => _rules.add((pattern, (_) => throw error));
@@ -37,6 +38,15 @@ class FakeRemoteShell implements RemoteShell {
 
   @override
   Future<ByteChannel> openUnixSocket(String path) => throw UnimplementedError();
+
+  @override
+  Future<void> writeFile(
+    String path,
+    Uint8List data, {
+    int mode = 0x180,
+  }) async {
+    writes[path] = (data: data, mode: mode);
+  }
 
   @override
   Future<void> close() async => _closed = true;

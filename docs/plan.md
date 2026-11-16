@@ -83,3 +83,15 @@ Cross-layer API: `core/contracts.dart` only.
 - English for code, comments, identifiers. UI copy in Spanish (l10n later).
 - No real agent CLIs (claude, codex, pando) in automated tests.
 - Never log keys, passwords or prompt text.
+
+## Dictation
+
+Chat composer dictation (`lib/src/ui/widgets/dictation/`): `DictationService` (speech_to_text behind an interface, overridable through `dictationServiceProvider`), `DictationButton` (tap = start/stop, long-press = cancel; partial text is spliced live at the cursor by the pure `DictationSplice`), language from the "Dictado" setting (`dictationLocaleProvider`, kept in shared_preferences; automatic = device locale if the recognizer supports it, else `es_ES`). Transcribed text is never logged. Android needs Google speech services (RecognitionService); iOS Speech needs a real device.
+
+## Images
+
+The composer's "+" attaches up to 6 images (`widgets/attachments/`): gallery (multiple) or camera through `image_picker` (scaled to 2048 px, quality 85) behind `AttachmentSource` (`attachmentSourceProvider`, faked in tests). Tapping a thumbnail opens `screens/image_editor_screen.dart` on the ORIGINAL image: pen, arrow, rectangle, text, 5 colors, thin/thick stroke, undo/redo/clear. Marks live in image space (`ui/annotate/annotation_model.dart`, pure Dart; painter in `annotation_painter.dart`), so "Listo" flattens them to a full-resolution PNG (`renderAnnotatedPng`); the model is kept per attachment to reopen the editor. On send each image is uploaded with `SessionsRepository.uploadImage` (`RemoteShell.writeFile`: SFTP, falling back to `base64 -d`/`-D` over exec) to `${XDG_CACHE_HOME:-$HOME/.cache}/agentd-app/uploads/<session>/<yyyyMMdd-HHmmss>-<n>.<ext>` (dir 0700, file 0600), then ONE prompt is sent: the text, a blank line and one absolute path per line (`composePrompt`). On failure attachments and text stay (uploaded paths are reused on retry). Remote files are not deleted by the app yet (the cache dir can be cleaned by hand). Chat tab only: agentd sessions.
+
+## Theme
+
+Dark, light and system (`ThemeChoice` in Ajustes > Apariencia). `ui/theme.dart`: `AppPalette` (const `dark` = the mockup values, `light`; `AppPalette.resolve(choice, platformBrightness)`), and `AppColors.x` are static getters over `AppColors.palette`, so call sites stay `AppColors.x` but cannot be `const`. The root `AgentdApp` sets the palette (on first build, on a setting change and on `didChangePlatformBrightness`), builds `ThemeData` from it, sets the system bar style, and after a change marks every element dirty so the whole tree repaints without losing state or routes. Never cache colors or TextStyles in `static final`/top-level variables: use getters. Not themed: the terminal (xterm `terminalTheme` and `terminalBg` stay dark in both modes), the annotation mark colors (`AnnotationColors`), and the Android/iOS launch screens. Tests: `test/ui/theme_test.dart`.

@@ -190,7 +190,7 @@ class _NewSessionScreenState extends ConsumerState<NewSessionScreen> {
                       color: AppColors.surface,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
-                        side: const BorderSide(color: AppColors.border),
+                        side: BorderSide(color: AppColors.border),
                       ),
                       clipBehavior: Clip.antiAlias,
                       child: InkWell(
@@ -208,7 +208,7 @@ class _NewSessionScreenState extends ConsumerState<NewSessionScreen> {
                                 Expanded(
                                   child: Text(host == null ? '' : _hostSub(host), style: AppText.caption, overflow: TextOverflow.ellipsis),
                                 ),
-                                const Icon(Icons.expand_more, size: 18, color: AppColors.muted),
+                                Icon(Icons.expand_more, size: 18, color: AppColors.muted),
                               ],
                             ),
                           ),
@@ -292,7 +292,7 @@ class _NewSessionScreenState extends ConsumerState<NewSessionScreen> {
             ),
             Container(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 border: Border(top: BorderSide(color: AppColors.divider)),
               ),
               child: Column(

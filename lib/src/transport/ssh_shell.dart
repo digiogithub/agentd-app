@@ -87,6 +87,89 @@ class SshRemoteShell implements RemoteShell {
   }
 
   @override
+  Future<void> writeFile(
+    String path,
+    Uint8List data, {
+    int mode = 0x180,
+  }) async {
+    if (!path.startsWith('/')) {
+      throw ArgumentError.value(path, 'path', 'must be absolute');
+    }
+    try {
+      await _writeSftp(path, data, mode);
+    } on SftpError {
+      await _writeExec(path, data, mode);
+    } on SSHChannelOpenError {
+      await _writeExec(path, data, mode);
+    } on SSHChannelRequestError {
+      await _writeExec(path, data, mode);
+    }
+  }
+
+  Future<void> _writeSftp(String path, Uint8List data, int mode) async {
+    final sftp = await client.sftp();
+    try {
+      final slash = path.lastIndexOf('/');
+      if (slash > 0) {
+        var dir = '';
+        for (final part in path.substring(1, slash).split('/')) {
+          if (part.isEmpty) continue;
+          dir = '$dir/$part';
+          try {
+            await sftp.stat(dir);
+          } on SftpStatusError {
+            await sftp.mkdir(
+              dir,
+              SftpFileAttrs(mode: SftpFileMode.value(0x1C0)),
+            ); // 0700
+          }
+        }
+      }
+      final file = await sftp.open(
+        path,
+        mode:
+            SftpFileOpenMode.create |
+            SftpFileOpenMode.write |
+            SftpFileOpenMode.truncate,
+      );
+      try {
+        await file.writeBytes(data);
+      } finally {
+        await file.close();
+      }
+      await sftp.setStat(path, SftpFileAttrs(mode: SftpFileMode.value(mode)));
+    } finally {
+      sftp.close();
+    }
+  }
+
+  /// Fallback when the SFTP subsystem is unavailable: base64 on stdin, decoded
+  /// by `base64 -d` (GNU, newer macOS) or `base64 -D` (older macOS).
+  Future<void> _writeExec(String path, Uint8List data, int mode) async {
+    final slash = path.lastIndexOf('/');
+    final dir = slash > 0 ? path.substring(0, slash) : '/';
+    final b = base64Encode(data);
+    final wrapped = StringBuffer();
+    for (var i = 0; i < b.length; i += 76) {
+      wrapped.writeln(b.substring(i, i + 76 > b.length ? b.length : i + 76));
+    }
+    final q = shellQuote(path);
+    final cmd =
+        'umask 077; mkdir -p ${shellQuote(dir)} && { base64 -d 2>/dev/null || base64 -D; } > $q && chmod ${mode.toRadixString(8)} $q';
+    final r = await exec(
+      cmd,
+      timeout: const Duration(minutes: 2),
+      stdin: wrapped.toString(),
+    );
+    if (!r.ok) {
+      final err = r.stderr.trim();
+      throw StateError(
+        'no se pudo escribir el fichero en el host${err.isEmpty ? '' : ': $err'}',
+      );
+    }
+  }
+
+  @override
   Future<void> close() async {
     client.close();
     await done;

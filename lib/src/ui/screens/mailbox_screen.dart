@@ -44,7 +44,7 @@ class _MailboxScreenState extends ConsumerState<MailboxScreen> {
             for (final h in hosts)
               ListTile(
                 title: Text(h.config.name, style: AppFonts.inter(size: 15, weight: FontWeight.w600)),
-                trailing: h.config.id == _hostId ? const Icon(Icons.check, color: AppColors.accent) : null,
+                trailing: h.config.id == _hostId ? Icon(Icons.check, color: AppColors.accent) : null,
                 onTap: () => Navigator.pop(ctx, h.config.id),
               ),
           ],
@@ -96,7 +96,7 @@ class _MailboxScreenState extends ConsumerState<MailboxScreen> {
             Flexible(
               child: Text('Mensajes entre agentes · ${host?.config.name ?? 'sin host'}', style: AppText.overline, overflow: TextOverflow.ellipsis),
             ),
-            if (hosts.length > 1) const Icon(Icons.expand_more, size: 16, color: AppColors.muted),
+            if (hosts.length > 1) Icon(Icons.expand_more, size: 16, color: AppColors.muted),
           ],
         ),
       ),
@@ -222,7 +222,7 @@ class _MessageCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.symmetric(horizontal: 6),
                       child: Icon(Icons.arrow_forward, size: 14, color: AppColors.muted),
                     ),
@@ -246,7 +246,7 @@ class _MessageCard extends StatelessWidget {
             const SizedBox(height: 6),
             Container(
               padding: const EdgeInsets.only(left: 10),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 border: Border(left: BorderSide(color: AppColors.border, width: 2)),
               ),
               child: Text(r.body.isNotEmpty ? r.body : r.subject, style: AppFonts.inter(size: 13, color: AppColors.secondary, height: 1.4)),

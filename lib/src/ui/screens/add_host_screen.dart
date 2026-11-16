@@ -200,7 +200,7 @@ class _AddHostScreenState extends ConsumerState<AddHostScreen> {
           ),
           Container(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               border: Border(top: BorderSide(color: AppColors.divider)),
             ),
             child: Column(
@@ -275,7 +275,7 @@ class _QuickTile extends StatelessWidget {
       color: AppColors.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: AppColors.border),
+        side: BorderSide(color: AppColors.border),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(

@@ -1,13 +1,21 @@
 // Chat view of an agentd session: transcript, pending question, composer.
 
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/contracts.dart';
 import '../format.dart';
+import '../widgets/attachments/attachment.dart';
+import '../widgets/attachments/attachment_source.dart';
+import '../widgets/attachments/attachment_strip.dart';
+import 'image_editor_screen.dart';
+
 import '../providers.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/dictation/dictation_button.dart';
 import '../widgets/option_button.dart';
 
 class ChatTab extends ConsumerStatefulWidget {
@@ -25,11 +33,14 @@ class ChatTab extends ConsumerStatefulWidget {
 class _ChatTabState extends ConsumerState<ChatTab> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
+  final _attachments = AttachmentsController();
   bool _sending = false;
+  String? _progress;
   int _lastCount = 0;
 
   @override
   void dispose() {
+    _attachments.dispose();
     _input.dispose();
     _scroll.dispose();
     super.dispose();
@@ -37,16 +48,109 @@ class _ChatTabState extends ConsumerState<ChatTab> {
 
   Future<void> _send() async {
     final text = _input.text.trim();
-    if (text.isEmpty || _sending) return;
+    final atts = _attachments.items;
+    if ((text.isEmpty && atts.isEmpty) || _sending) return;
+    final repo = ref.read(sessionsRepositoryProvider);
     setState(() => _sending = true);
+    var uploading = true;
     try {
-      await ref.read(sessionsRepositoryProvider).prompt(widget.session, text);
+      final paths = <String>[];
+      for (final (i, a) in atts.indexed) {
+        if (mounted) {
+          setState(
+            () => _progress = 'Subiendo imagen ${i + 1} de ${atts.length}',
+          );
+        }
+        a.remotePath ??= await repo.uploadImage(
+          widget.session,
+          a.sendBytes,
+          extension: a.sendExtension,
+        );
+        paths.add(a.remotePath!);
+      }
+      uploading = false;
+      await repo.prompt(widget.session, composePrompt(text, paths));
       _input.clear();
-    } catch (_) {
-      if (mounted) showToast(context, 'No se pudo enviar: el agente está ocupado o tienes un borrador pendiente');
+      _attachments.clear();
+    } catch (e) {
+      if (mounted) {
+        showToast(
+          context,
+          uploading ? 'No se pudieron subir las imágenes: ${errorReason(e)}' : 'No se pudo enviar: el agente está ocupado o tienes un borrador pendiente',
+        );
+      }
     } finally {
-      if (mounted) setState(() => _sending = false);
+      if (mounted) {
+        setState(() {
+          _sending = false;
+          _progress = null;
+        });
+      }
     }
+  }
+
+  Future<void> _pickSource() async {
+    if (_attachments.remaining <= 0) {
+      showToast(context, 'Máximo $kMaxAttachments imágenes por mensaje');
+      return;
+    }
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              key: const ValueKey('attach-gallery'),
+              leading: Icon(
+                Icons.photo_library_outlined,
+                color: AppColors.secondary,
+              ),
+              title: Text('Galería', style: AppFonts.inter(size: 15)),
+              onTap: () => Navigator.pop(ctx, 'gallery'),
+            ),
+            ListTile(
+              key: const ValueKey('attach-camera'),
+              leading: Icon(
+                Icons.photo_camera_outlined,
+                color: AppColors.secondary,
+              ),
+              title: Text('Cámara', style: AppFonts.inter(size: 15)),
+              onTap: () => Navigator.pop(ctx, 'camera'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    final source = ref.read(attachmentSourceProvider);
+    try {
+      final picked = choice == 'gallery'
+          ? await source.gallery(limit: _attachments.remaining)
+          : [?await source.camera()];
+      if (!mounted || picked.isEmpty) return;
+      final added = _attachments.addAll(picked);
+      if (added < picked.length) {
+        showToast(context, 'Máximo $kMaxAttachments imágenes por mensaje');
+      }
+    } catch (_) {
+      if (mounted) {
+        showToast(
+          context,
+          choice == 'gallery'
+              ? 'No se pudo abrir la galería'
+              : 'No se pudo abrir la cámara',
+        );
+      }
+    }
+  }
+
+  Future<void> _editAttachment(Attachment a) async {
+    final r = await openImageEditor(context, a.original, model: a.model);
+    if (r == null || !mounted) return;
+    _attachments.setEdit(a.id, r.model, r.png);
   }
 
   Future<void> _choose(SessionOption o) async {
@@ -113,7 +217,7 @@ class _ChatTabState extends ConsumerState<ChatTab> {
               : ListView(controller: _scroll, padding: const EdgeInsets.fromLTRB(16, 16, 16, 8), children: children),
         ),
         Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             border: Border(top: BorderSide(color: AppColors.divider)),
           ),
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 14),
@@ -125,7 +229,7 @@ class _ChatTabState extends ConsumerState<ChatTab> {
                   padding: const EdgeInsets.fromLTRB(6, 0, 0, 8),
                   child: Row(
                     children: [
-                      const Icon(Icons.schedule, size: 14, color: AppColors.muted),
+                      Icon(Icons.schedule, size: 14, color: AppColors.muted),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
@@ -151,6 +255,27 @@ class _ChatTabState extends ConsumerState<ChatTab> {
                     ],
                   ),
                 ),
+              ListenableBuilder(
+                listenable: _attachments,
+                builder: (context, _) => _attachments.isEmpty
+                    ? const SizedBox.shrink()
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          AttachmentStrip(
+                            items: _attachments.items,
+                            enabled: !_sending,
+                            onEdit: _editAttachment,
+                            onRemove: (a) => _attachments.remove(a.id),
+                          ),
+                          if (_progress != null)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(6, 0, 0, 6),
+                              child: Text(_progress!, style: AppText.caption),
+                            ),
+                        ],
+                      ),
+              ),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -161,7 +286,7 @@ class _ChatTabState extends ConsumerState<ChatTab> {
                     border: AppColors.border,
                     fg: AppColors.secondary,
                     iconSize: 20,
-                    onPressed: () => showToast(context, 'Adjuntar imágenes llegará pronto'),
+                    onPressed: _sending ? null : _pickSource,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -182,27 +307,34 @@ class _ChatTabState extends ConsumerState<ChatTab> {
                           ).copyWith(
                             semanticCounterText: 'Mensaje para el agente',
                             hintMaxLines: 1,
-                            suffixIcon: Semantics(
-                              container: true,
-                              button: true,
-                              label: 'Dictar',
-                              excludeSemantics: true,
-                              child: IconButton(
-                                icon: const Icon(Icons.mic_none, size: 18, color: AppColors.muted),
-                                onPressed: () => showToast(context, 'El dictado llegará pronto'),
-                              ),
-                            ),
+                            suffixIcon: DictationButton(controller: _input, focusNode: widget.composerFocus),
                           ),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  RoundIconButton(
-                    icon: Icons.arrow_upward,
-                    label: 'Enviar',
-                    bg: AppColors.accent,
-                    fg: AppColors.bg,
-                    iconSize: 20,
-                    onPressed: _sending ? null : _send,
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      RoundIconButton(
+                        icon: Icons.arrow_upward,
+                        label: _sending ? 'Enviando' : 'Enviar',
+                        bg: AppColors.accent,
+                        fg: AppColors.bg,
+                        iconSize: 20,
+                        onPressed: _sending ? null : _send,
+                      ),
+                      if (_progress != null)
+                        IgnorePointer(
+                          child: SizedBox(
+                            width: 44,
+                            height: 44,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: AppColors.bg,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),
@@ -212,6 +344,17 @@ class _ChatTabState extends ConsumerState<ChatTab> {
       ],
     );
   }
+}
+
+/// Short, safe text for a failure toast (never the stack, bytes or prompt).
+String errorReason(Object e) {
+  var t = e is StateError ? e.message : e.toString();
+  t = t
+      .replaceFirst(RegExp(r'^[A-Za-z]*(Exception|Error): '), '')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+  if (t.isEmpty) return 'error desconocido';
+  return t.length > 100 ? '${t.substring(0, 99)}…' : t;
 }
 
 /// One transcript entry.
@@ -230,7 +373,7 @@ class ChatItemView extends StatelessWidget {
             constraints: BoxConstraints(maxWidth: width * 0.82),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: AppColors.accentBg,
                 borderRadius: BorderRadius.only(
                   topLeft: Radius.circular(18),
@@ -284,9 +427,9 @@ class _ToolItemViewState extends State<ToolItemView> {
     final item = widget.item;
     final hasBody = item.text.trim().isNotEmpty;
     final icon = switch (item.ok) {
-      true => const Icon(Icons.check, size: 16, color: AppColors.success),
-      false => const Icon(Icons.close, size: 16, color: AppColors.danger),
-      null => const Icon(Icons.description_outlined, size: 16, color: AppColors.muted),
+      true => Icon(Icons.check, size: 16, color: AppColors.success),
+      false => Icon(Icons.close, size: 16, color: AppColors.danger),
+      null => Icon(Icons.description_outlined, size: 16, color: AppColors.muted),
     };
     final head = SizedBox(
       height: 44,
@@ -326,7 +469,7 @@ class _ToolItemViewState extends State<ToolItemView> {
         color: AppColors.surface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: AppColors.border),
+          side: BorderSide(color: AppColors.border),
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(

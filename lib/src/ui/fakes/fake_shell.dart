@@ -81,6 +81,18 @@ class FakeRemoteShell implements RemoteShell {
   @override
   Future<ByteChannel> openUnixSocket(String path) => Future.error(UnsupportedError('fake shell has no sockets'));
 
+  /// Files written with [writeFile], by path.
+  final Map<String, ({Uint8List data, int mode})> writes = {};
+
+  @override
+  Future<void> writeFile(
+    String path,
+    Uint8List data, {
+    int mode = 0x180,
+  }) async {
+    writes[path] = (data: data, mode: mode);
+  }
+
   @override
   Future<void> close() async => _closed = true;
 

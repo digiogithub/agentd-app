@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:agentd_app/src/core/contracts.dart';
 import 'package:agentd_app/src/transport/pool.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,7 +16,18 @@ class FakeShell implements RemoteShell {
   Future<void> close() async => closed = true;
 
   @override
-  Future<ExecResult> exec(String command, {Duration timeout = const Duration(seconds: 30), String? stdin}) async => const ExecResult(0, '', '');
+  Future<void> writeFile(
+    String path,
+    Uint8List data, {
+    int mode = 0x180,
+  }) async {}
+
+  @override
+  Future<ExecResult> exec(
+    String command, {
+    Duration timeout = const Duration(seconds: 30),
+    String? stdin,
+  }) async => const ExecResult(0, '', '');
 
   @override
   Future<ByteChannel> openUnixSocket(String path) => throw UnimplementedError();

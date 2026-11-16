@@ -81,12 +81,12 @@ class ApprovalCard extends StatelessWidget {
                     color: Colors.transparent,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
-                      side: const BorderSide(color: AppColors.border),
+                      side: BorderSide(color: AppColors.border),
                     ),
                     clipBehavior: Clip.antiAlias,
                     child: InkWell(
                       onTap: onOpen,
-                      child: const Icon(Icons.chevron_right, size: 20, color: AppColors.text),
+                      child: Icon(Icons.chevron_right, size: 20, color: AppColors.text),
                     ),
                   ),
                 ),
@@ -180,7 +180,7 @@ class SessionRow extends StatelessWidget {
     final mux = s.source != SessionSource.agentd;
 
     final Widget avatar = mux
-        ? const Avatar(icon: Icons.space_dashboard_outlined, bg: AppColors.raised, fg: AppColors.secondary)
+        ? Avatar(icon: Icons.space_dashboard_outlined, bg: AppColors.raised, fg: AppColors.secondary)
         : Avatar(letter: avatarLetter(s), bg: working ? AppColors.workingBg : AppColors.raised, fg: working ? AppColors.working : AppColors.muted);
 
     final String sub;

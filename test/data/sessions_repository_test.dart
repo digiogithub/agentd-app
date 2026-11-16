@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:agentd_app/src/core/contracts.dart';
 import 'package:agentd_app/src/data/data.dart';
@@ -290,30 +291,126 @@ void main() {
     expect(zellij.launched.single.command, ['sh', '-c', r'exec "${SHELL:-sh}" -l']);
   });
 
-  test('an SSH shell is listed while open and replays its output to a new view', () async {
-    final s = await repo.launch(hostId: 'h', where: SessionSource.shell, project: '~/src/api', harness: 'bash');
-    expect((s.source, s.name, s.project), (SessionSource.shell, 'ssh-api', 'api'));
-    final pty = shell.ptys.single;
-    expect(pty.command, r'cd "$HOME"/src/api 2>/dev/null || cd; exec "${SHELL:-sh}" -l');
-    var l = await until((l) => byName(l, 'ssh-api') != null);
+  test(
+    'an SSH shell is listed while open and replays its output to a new view',
+    () async {
+      final s = await repo.launch(
+        hostId: 'h',
+        where: SessionSource.shell,
+        project: '~/src/api',
+        harness: 'bash',
+      );
+      expect(
+        (s.source, s.name, s.project),
+        (SessionSource.shell, 'ssh-api', 'api'),
+      );
+      final pty = shell.ptys.single;
+      expect(
+        pty.command,
+        r'cd "$HOME"/src/api 2>/dev/null || cd; exec "${SHELL:-sh}" -l',
+      );
+      var l = await until((l) => byName(l, 'ssh-api') != null);
 
-    pty.emit('user@h:~/src/api\$ ');
-    await Future<void>.delayed(const Duration(milliseconds: 10));
-    final view = await repo.terminal(byName(l, 'ssh-api')!, cols: 60, rows: 20);
-    final got = StringBuffer();
-    subs.add(view.stream.listen((b) => got.write(utf8.decode(b))));
-    await eventually(() => got.toString().contains(r'~/src/api$'));
-    view.add(utf8.encode('ls\r'));
-    expect(pty.written, ['ls\r']);
-    expect(pty.size, (60, 20));
-    await view.close(); // detach: the shell keeps running
-    l = await until((l) => byName(l, 'ssh-api') != null);
+      pty.emit('user@h:~/src/api\$ ');
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      final view = await repo.terminal(
+        byName(l, 'ssh-api')!,
+        cols: 60,
+        rows: 20,
+      );
+      final got = StringBuffer();
+      subs.add(view.stream.listen((b) => got.write(utf8.decode(b))));
+      await eventually(() => got.toString().contains(r'~/src/api$'));
+      view.add(utf8.encode('ls\r'));
+      expect(pty.written, ['ls\r']);
+      expect(pty.size, (60, 20));
+      await view.close(); // detach: the shell keeps running
+      l = await until((l) => byName(l, 'ssh-api') != null);
 
-    // A second shell in the same project gets its own name.
-    final s2 = await repo.launch(hostId: 'h', where: SessionSource.shell, project: '~/src/api', harness: 'bash');
-    expect(s2.name, 'ssh-api-2');
+      // A second shell in the same project gets its own name.
+      final s2 = await repo.launch(
+        hostId: 'h',
+        where: SessionSource.shell,
+        project: '~/src/api',
+        harness: 'bash',
+      );
+      expect(s2.name, 'ssh-api-2');
 
-    pty.exit();
-    await until((l) => byName(l, 'ssh-api') == null && byName(l, 'ssh-api-2') != null);
+      pty.exit();
+      await until(
+        (l) => byName(l, 'ssh-api') == null && byName(l, 'ssh-api-2') != null,
+      );
+    },
+  );
+
+  group('uploadImage', () {
+    LiveSessionsRepository withClock() => LiveSessionsRepository(
+      hosts: hosts,
+      clients: clients,
+      now: () => DateTime(2026, 11, 16, 9, 5, 7),
+    );
+    const session = AgentSession(
+      hostId: 'h',
+      source: SessionSource.agentd,
+      name: 'claude@web/app',
+    );
+
+    test('writes 0600 into the per-session cache dir and returns the absolute path', () async {
+      shell.on(r'XDG_CACHE_HOME', const ExecResult(0, '/home/u/.cache', ''));
+      final r = withClock();
+      final bytes = Uint8List.fromList([1, 2, 3]);
+      final p1 = await r.uploadImage(session, bytes, extension: 'PNG');
+      final p2 = await r.uploadImage(session, bytes, extension: 'jpg');
+      expect(
+        p1,
+        '/home/u/.cache/agentd-app/uploads/claude_web_app/20261116-090507-1.png',
+      );
+      expect(
+        p2,
+        '/home/u/.cache/agentd-app/uploads/claude_web_app/20261116-090507-2.jpg',
+      );
+      expect(shell.writes[p1]!.mode, 384); // 0600
+      expect(shell.writes[p1]!.data, bytes);
+      // Directory created once, private (0700), base resolved once.
+      final mk = shell.commands.where((c) => c.contains('mkdir -p')).toList();
+      expect(mk, hasLength(1));
+      expect(mk.single, contains('umask 077'));
+      expect(mk.single, contains('chmod 700'));
+      expect(
+        shell.commands.where((c) => c.contains('XDG_CACHE_HOME')),
+        hasLength(1),
+      );
+    });
+
+    test(
+      'falls back to \$HOME/.cache when the cache dir cannot be read',
+      () async {
+        final r = withClock();
+        final p = await r.uploadImage(session, Uint8List(1), extension: 'png');
+        expect(p, startsWith('/home/u/.cache/agentd-app/uploads/'));
+      },
+    );
+
+    test('session names are sanitized and a bad extension is refused', () {
+      expect(uploadDirName('codex@api'), 'codex_api');
+      expect(uploadDirName('..'), 'session');
+      expect(uploadDirName('a b/../c'), 'a_b_.._c');
+      expect(
+        uploadFileName(DateTime(2026, 1, 2, 3, 4, 5), 3, 'png'),
+        '20260102-030405-3.png',
+      );
+      expect(
+        withClock().uploadImage(session, Uint8List(1), extension: '../x'),
+        throwsArgumentError,
+      );
+    });
+
+    test('a failing write surfaces the error', () async {
+      shell.failWrites = true;
+      expect(
+        withClock().uploadImage(session, Uint8List(1), extension: 'png'),
+        throwsStateError,
+      );
+    });
   });
 }

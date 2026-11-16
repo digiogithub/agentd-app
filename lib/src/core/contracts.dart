@@ -56,6 +56,10 @@ abstract class RemoteShell {
   /// `direct-streamlocal@openssh.com`). Used for the agentd daemon socket.
   Future<ByteChannel> openUnixSocket(String path);
 
+  /// Writes [data] to [path] on the host (parent directories are created),
+  /// replacing any file there. [mode] is the POSIX permission, 0600 by default.
+  Future<void> writeFile(String path, Uint8List data, {int mode = 0x180});
+
   Future<void> close();
   bool get isClosed;
 }
@@ -379,6 +383,15 @@ abstract class SessionsRepository {
   Future<void> choose(AgentSession s, SessionOption option, {required int revision, required String epoch});
   Future<void> keys(AgentSession s, List<String> keys); // abstract names: enter esc tab up down ctrl-c ...
   Future<void> interrupt(AgentSession s);
+
+  /// Copies an image to the host (private cache dir of the app, mode 0600) and
+  /// returns its absolute remote path, to be written in a prompt. [extension]
+  /// is without the dot (`png`, `jpg`).
+  Future<String> uploadImage(
+    AgentSession s,
+    Uint8List bytes, {
+    required String extension,
+  });
 
   /// Raw terminal (agentd attach, zellij attach, tmux attach).
   Future<PtySession> terminal(AgentSession s, {int cols = 80, int rows = 24, bool observe = false});

@@ -92,7 +92,7 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
         child: Column(
           children: [
             Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 border: Border(bottom: BorderSide(color: AppColors.divider)),
               ),
               padding: const EdgeInsets.fromLTRB(12, 14, 12, 10),
@@ -233,7 +233,7 @@ class _MoreMenu extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.stop_circle_outlined, color: AppColors.danger),
+              leading: Icon(Icons.stop_circle_outlined, color: AppColors.danger),
               title: Text('Interrumpir', style: AppFonts.inter(size: 15, color: AppColors.danger)),
               onTap: () {
                 Navigator.pop(ctx);
@@ -241,7 +241,7 @@ class _MoreMenu extends StatelessWidget {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.inbox_outlined, color: AppColors.secondary),
+              leading: Icon(Icons.inbox_outlined, color: AppColors.secondary),
               title: Text('Ver buzón del host', style: AppFonts.inter(size: 15)),
               onTap: () {
                 Navigator.pop(ctx);

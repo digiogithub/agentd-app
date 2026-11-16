@@ -315,11 +315,11 @@ class _ProvisionScreenState extends ConsumerState<ProvisionScreen> {
                   width: 20,
                   height: 20,
                   child: p.skipped
-                      ? const Icon(Icons.remove_circle_outline, size: 20, color: AppColors.muted)
+                      ? Icon(Icons.remove_circle_outline, size: 20, color: AppColors.muted)
                       : p.error != null
-                      ? const Icon(Icons.error_outline, size: 20, color: AppColors.danger)
+                      ? Icon(Icons.error_outline, size: 20, color: AppColors.danger)
                       : p.done
-                      ? const Icon(Icons.check_circle, size: 20, color: AppColors.success)
+                      ? Icon(Icons.check_circle, size: 20, color: AppColors.success)
                       : const CircularProgressIndicator(strokeWidth: 2),
                 ),
                 const SizedBox(width: 12),
@@ -358,7 +358,7 @@ class _ProvisionScreenState extends ConsumerState<ProvisionScreen> {
     }
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(top: BorderSide(color: AppColors.divider)),
       ),
       child: Column(

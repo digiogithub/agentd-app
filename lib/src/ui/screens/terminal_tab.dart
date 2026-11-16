@@ -14,30 +14,32 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/key_bar.dart';
 
-const terminalTheme = TerminalTheme(
-  cursor: AppColors.accent,
+// The terminal stays dark in both modes: agent TUIs assume a dark background.
+final _d = AppPalette.dark;
+final terminalTheme = TerminalTheme(
+  cursor: _d.accent,
   selection: Color(0x559DB4FF),
-  foreground: AppColors.secondary,
-  background: AppColors.terminalBg,
+  foreground: _d.secondary,
+  background: _d.terminalBg,
   black: Color(0xFF0D1117),
   red: Color(0xFFFF7B72),
-  green: AppColors.success,
+  green: _d.success,
   yellow: Color(0xFFD29922),
-  blue: AppColors.working,
+  blue: _d.working,
   magenta: Color(0xFFD2A8FF),
   cyan: Color(0xFF39C5CF),
-  white: AppColors.secondary,
-  brightBlack: AppColors.faint,
-  brightRed: AppColors.danger,
-  brightGreen: AppColors.successText,
-  brightYellow: AppColors.waiting,
-  brightBlue: AppColors.accent,
+  white: _d.secondary,
+  brightBlack: _d.faint,
+  brightRed: _d.danger,
+  brightGreen: _d.successText,
+  brightYellow: _d.waiting,
+  brightBlue: _d.accent,
   brightMagenta: Color(0xFFE2C5FF),
   brightCyan: Color(0xFF56D4DD),
-  brightWhite: AppColors.text,
-  searchHitBackground: AppColors.waitingBg,
-  searchHitBackgroundCurrent: AppColors.waiting,
-  searchHitForeground: AppColors.text,
+  brightWhite: _d.text,
+  searchHitBackground: _d.waitingBg,
+  searchHitBackgroundCurrent: _d.waiting,
+  searchHitForeground: _d.text,
 );
 
 class TerminalTab extends ConsumerStatefulWidget {
@@ -210,7 +212,7 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
         ),
         Container(
           padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppColors.navBg,
             border: Border(top: BorderSide(color: AppColors.divider)),
           ),

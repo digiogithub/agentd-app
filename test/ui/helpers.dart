@@ -37,14 +37,20 @@ void setUpUiTests() {
 /// Pumps [child] as the home of a themed MaterialApp on a 390-wide phone
 /// (844 tall by default; long forms pass a taller [height] so lazy lists
 /// build every row).
-Future<Fakes> pumpUi(WidgetTester tester, Widget child, {Fakes? fakes, double height = 844}) async {
+Future<Fakes> pumpUi(
+  WidgetTester tester,
+  Widget child, {
+  Fakes? fakes,
+  double height = 844,
+  List<Override> extraOverrides = const [],
+}) async {
   final f = fakes ?? Fakes();
   tester.view.physicalSize = Size(390, height) * 3;
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
     ProviderScope(
-      overrides: f.overrides,
+      overrides: [...f.overrides, ...extraOverrides],
       child: MaterialApp(theme: buildAppTheme(), home: child),
     ),
   );

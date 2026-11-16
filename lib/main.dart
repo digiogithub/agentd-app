@@ -9,16 +9,24 @@ import 'src/ui/providers.dart';
 /// screenshots); otherwise the app uses the real repositories.
 const bool useFakes = bool.fromEnvironment('AGENTD_APP_FAKE');
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(buildApp(data: useFakes ? null : AppData.create()));
+  if (useFakes) {
+    runApp(buildApp());
+    return;
+  }
+  final store = PrefsSettingsStore();
+  runApp(buildApp(data: AppData.create(), settingsStore: store, settings: await store.load()));
 }
 
 /// The app root: on [data] (real repositories), or on the fakes when null.
-Widget buildApp({AppData? data}) {
+/// [settingsStore] + [settings] persist the local settings (theme, mutes).
+Widget buildApp({AppData? data, SettingsStore? settingsStore, AppSettings? settings}) {
   if (data == null) return const ProviderScope(child: AgentdApp());
   return ProviderScope(
     overrides: [
+      if (settingsStore != null) settingsStoreProvider.overrideWithValue(settingsStore),
+      if (settings != null) initialSettingsProvider.overrideWithValue(settings),
       hostsRepositoryProvider.overrideWithValue(data.hosts),
       sessionsRepositoryProvider.overrideWithValue(data.sessions),
       mailRepositoryProvider.overrideWithValue(data.mail),

@@ -3,6 +3,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:material_ui/material_ui.dart';
 
 import '../core/contracts.dart';
@@ -16,18 +17,90 @@ import 'widgets/bottom_nav.dart';
 import 'widgets/host_key_dialog.dart';
 
 /// Root widget. Wrap it in a ProviderScope (overrides in providers.dart).
-class AgentdApp extends StatelessWidget {
+///
+/// Resolves the theme choice (and, for "Sistema", the platform brightness)
+/// into an [AppPalette], publishes it in [AppColors.palette] and repaints the
+/// whole tree when it changes. Screens keep their state and the navigator
+/// keeps its routes: every element is only marked dirty.
+class AgentdApp extends ConsumerStatefulWidget {
   const AgentdApp({super.key});
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    title: 'agentd',
-    debugShowCheckedModeBanner: false,
-    theme: buildAppTheme(),
-    darkTheme: buildAppTheme(),
-    themeMode: ThemeMode.dark,
-    home: const AppShell(),
-  );
+  ConsumerState<AgentdApp> createState() => _AgentdAppState();
+}
+
+class _AgentdAppState extends ConsumerState<AgentdApp>
+    with WidgetsBindingObserver {
+  Brightness get _platform =>
+      WidgetsBinding.instance.platformDispatcher.platformBrightness;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // First frame: nothing is built yet, so no repaint walk is needed.
+    AppColors.palette = AppPalette.resolve(
+      ref.read(settingsProvider).theme,
+      _platform,
+    );
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangePlatformBrightness() =>
+      _apply(ref.read(settingsProvider).theme);
+
+  /// Switches to the palette for [choice]; repaints everything if it changed.
+  void _apply(ThemeChoice choice) {
+    final next = AppPalette.resolve(choice, _platform);
+    if (identical(next, AppColors.palette)) return;
+    setState(() => AppColors.palette = next);
+    _rebuildAll(context as Element);
+  }
+
+  /// Many widgets are const or cached and read [AppColors] only in build, so
+  /// the new palette reaches them only if they rebuild: mark every element.
+  static void _rebuildAll(Element root) {
+    void visit(Element e) {
+      e.markNeedsBuild();
+      e.visitChildren(visit);
+    }
+
+    visit(root);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen(settingsProvider.select((s) => s.theme), (_, t) => _apply(t));
+    final p = AppColors.palette;
+    final dark = p.brightness == Brightness.dark;
+    final theme = buildAppTheme(p);
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: const Color(0x00000000),
+        statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+        statusBarBrightness: dark ? Brightness.dark : Brightness.light,
+        systemNavigationBarColor: p.navBg,
+        systemNavigationBarIconBrightness: dark
+            ? Brightness.light
+            : Brightness.dark,
+      ),
+      child: MaterialApp(
+        title: 'agentd',
+        debugShowCheckedModeBanner: false,
+        theme: theme,
+        darkTheme: theme,
+        themeMode: dark ? ThemeMode.dark : ThemeMode.light,
+        themeAnimationDuration: Duration.zero,
+        home: const AppShell(),
+      ),
+    );
+  }
 }
 
 class AppShell extends ConsumerStatefulWidget {
@@ -62,7 +135,18 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    body: IndexedStack(index: _index, children: const [AgentsScreen(), HostsScreen(), MailboxScreen(), SettingsScreen()]),
-    bottomNavigationBar: AppBottomNav(index: _index, onTap: (i) => setState(() => _index = i)),
+    body: IndexedStack(
+      index: _index,
+      children: const [
+        AgentsScreen(),
+        HostsScreen(),
+        MailboxScreen(),
+        SettingsScreen(),
+      ],
+    ),
+    bottomNavigationBar: AppBottomNav(
+      index: _index,
+      onTap: (i) => setState(() => _index = i),
+    ),
   );
 }

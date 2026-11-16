@@ -3,6 +3,7 @@
 // so widget tests can assert on them.
 
 import 'dart:async';
+import 'dart:typed_data';
 
 import '../../core/contracts.dart';
 import 'fake_shell.dart';
@@ -190,6 +191,26 @@ class FakeSessionsRepository implements SessionsRepository {
   @override
   Future<void> keys(AgentSession s, List<String> keys) async {
     calls.add(FakeCall('keys', s.name, arg: List<String>.unmodifiable(keys)));
+  }
+
+  /// Image uploads received: remote path -> size in bytes.
+  final Map<String, int> uploads = {};
+
+  /// When set, [uploadImage] fails with this error (to test error handling).
+  Object? uploadError;
+
+  @override
+  Future<String> uploadImage(
+    AgentSession s,
+    Uint8List bytes, {
+    required String extension,
+  }) async {
+    calls.add(FakeCall('uploadImage', s.name, arg: extension));
+    if (uploadError != null) throw uploadError!;
+    final path =
+        '/home/demo/.cache/agentd-app/uploads/${s.name}/20261116-100000-${uploads.length + 1}.$extension';
+    uploads[path] = bytes.length;
+    return path;
   }
 
   @override

@@ -32,7 +32,7 @@ class AppBottomNav extends StatelessWidget {
       child: Container(
         height: 76 + bottomInset,
         padding: EdgeInsets.only(bottom: 8 + bottomInset),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.navBg,
           border: Border(top: BorderSide(color: AppColors.divider)),
         ),
