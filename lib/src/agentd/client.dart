@@ -162,10 +162,31 @@ class AgentdClient {
       if (linesLimit != null && linesLimit > 0) 'lines_limit': linesLimit,
       'from_line': ?fromLine,
       if (scrollback) 'scrollback': true,
-      if (markup) 'markup': true,
+      if (markup && !_noMarkup) 'markup': true,
     };
-    return AgentdView.fromJson(await _callMap('view', args), name: name);
+    final Map<String, Object?> raw;
+    try {
+      raw = await _callMap('view', args);
+    } on AgentdError catch (e) {
+      // A daemon before 0.6.3 rejects the unknown "markup" argument: ask
+      // without it from now on and escape its plain text.
+      if (args.containsKey('markup') && e.code == AgentdErrorCode.invalid && e.message.contains('markup')) {
+        _noMarkup = true;
+        return view(name, sinceRevision: sinceRevision, epoch: epoch, linesLimit: linesLimit, fromLine: fromLine, scrollback: scrollback, markup: true);
+      }
+      rethrow;
+    }
+    if (markup && _noMarkup && raw['lines'] is List) {
+      raw['lines'] = [
+        for (final l in raw['lines'] as List)
+          if (l is Map && l['text'] is String) {...l, 'md': escapeMarkup(l['text'] as String)} else l,
+      ];
+    }
+    return AgentdView.fromJson(raw, name: name);
   }
+
+  /// The daemon rejected view markup (agentd before 0.6.3).
+  bool _noMarkup = false;
 
   /// Clears a session's attention flag; returns the view revision.
   Future<int> viewAck(String name) async => jsonInt((await _callMap('view_ack', {'name': name}))['revision']);
@@ -338,4 +359,22 @@ class AgentdClient {
       rethrow;
     }
   }
+}
+
+/// [text] as chat markup that shows as itself (the escaping agentd's
+/// screen.Markup applies), for daemons that send no `md`.
+String escapeMarkup(String text) {
+  final b = StringBuffer();
+  for (final r in text.runes) {
+    final c = String.fromCharCode(r);
+    if (r < 128 && r'\*_`[]<>|~#&'.contains(c)) b.write(r'\');
+    b.write(c);
+  }
+  var out = b.toString();
+  final t = out.trim();
+  if (t.isNotEmpty && t.replaceAll(RegExp(r'[-= ]'), '').isEmpty) {
+    final i = out.indexOf(RegExp(r'[-=]'));
+    out = '${out.substring(0, i)}\\${out.substring(i)}';
+  }
+  return out;
 }

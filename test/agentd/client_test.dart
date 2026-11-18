@@ -77,6 +77,28 @@ void main() {
     expect(full.attention.reason, 'waiting');
   });
 
+  test('view markup: an old daemon that rejects it gets plain, escaped text', () async {
+    var calls = 0;
+    d.on('view', (q) {
+      calls++;
+      if (q.args.containsKey('markup')) {
+        q.fail('invalid view args: json: unknown field "markup"', code: 'invalid');
+        return;
+      }
+      q.ok({
+        ...viewJson(),
+        'lines': [
+          {'text': 'a *b* `c`', 'role': 'transcript'},
+        ],
+      });
+    });
+    final v = await c.view('s', markup: true);
+    expect(v.lines.single.markup, r'a \*b\* \`c\`');
+    expect(calls, 2);
+    await c.view('s', markup: true);
+    expect(calls, 3, reason: 'remembered: no second refused call');
+  });
+
   test('act prompt / choose / keys / interrupt / cancel args', () async {
     d.answer('act', {'revision': 10, 'status': 'working', 'result': 'submitted', 'submitted': true});
     final r = await c.prompt('s', 'hello', revision: 9, epoch: 'ep1');
