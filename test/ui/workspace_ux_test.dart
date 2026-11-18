@@ -21,31 +21,22 @@ void main() {
 
   group('groupByProject', () {
     test(
-      'groups by host + directory, attention first, sessions ordered inside',
+      'groups by host + directory, alphabetical, never by live status',
       () {
         final now = DateTime(2026, 11, 16, 12);
         final groups = groupByProject(sampleSessions(now));
-        expect(
-          groups.first.label,
-          '~/src/webapp',
-        ); // claude@webapp waits for an answer
-        expect(groups.first.hostId, 'estudio');
+        final labels = groups.map((g) => g.label.toLowerCase()).toList();
+        expect(labels, [...labels]..sort());
         // Same directory on another host is another group.
         expect(groups.where((g) => g.label == '~/src/webapp'), hasLength(2));
         // A session with no cwd and no project: "Sin proyecto".
         final none = groups.singleWhere((g) => !g.hasProject);
         expect(none.label, noProjectLabel);
         expect(none.sessions.single.name, 'main');
-        // Groups with something to answer come before the others.
-        final firstQuiet = groups.indexWhere((g) => g.needsAnswer == 0);
-        expect(
-          groups.skip(firstQuiet).every((g) => g.needsAnswer == 0),
-          isTrue,
-        );
       },
     );
 
-    test('inside a group: needs answer, working, then by last update', () {
+    test('inside a group: alphabetical, whatever the status or activity', () {
       final t = DateTime(2026, 11, 16, 12);
       AgentSession s(
         String n,
@@ -69,7 +60,7 @@ void main() {
       ]).single;
       expect(g.path, '/home/u/src/api'); // trailing slash removed
       expect(g.label, '~/src/api');
-      expect(g.sessions.map((x) => x.name), ['ask', 'work', 'new', 'old']);
+      expect(g.sessions.map((x) => x.name), ['ask', 'new', 'old', 'work']);
     });
 
     test('shortPath replaces the home directory', () {

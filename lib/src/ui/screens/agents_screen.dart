@@ -88,7 +88,7 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
     final online = hosts.where((h) => h.state == HostState.online).length;
 
     final visible = _query.isEmpty ? all : all.where((s) => sessionTitle(s).toLowerCase().contains(_query.toLowerCase())).toList();
-    final groups = {for (final g in SessionGroup.values) g: visible.where((s) => groupOf(s) == g).toList()};
+    final groups = {for (final g in SessionGroup.values) g: visible.where((s) => groupOf(s) == g).toList()..sort(compareSessions)};
     int count(SessionGroup g) => groups[g]!.length;
 
     final chips = [

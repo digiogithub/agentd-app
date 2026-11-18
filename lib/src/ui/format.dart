@@ -126,9 +126,19 @@ String shortPath(String path) {
   return m == null ? path : '~${path.substring(m.end)}';
 }
 
-/// Sessions grouped by host + project. Inside a group: needs-answer first,
-/// then working, then the rest by last update; groups by attention, then
-/// most recent activity, then label.
+/// Alphabetical, case-insensitive order of sessions (title, then key). It
+/// never depends on status or activity, so live updates do not reorder a list.
+int compareSessions(AgentSession a, AgentSession b) {
+  final ta = sessionTitle(a), tb = sessionTitle(b);
+  final c = ta.toLowerCase().compareTo(tb.toLowerCase());
+  if (c != 0) return c;
+  final d = ta.compareTo(tb);
+  return d != 0 ? d : a.key.compareTo(b.key);
+}
+
+/// Sessions grouped by host + project. The order never follows live data
+/// (status, attention, last update), so the list does not jump on refresh:
+/// groups alphabetically by label (then host), sessions by title.
 List<ProjectGroup> groupByProject(Iterable<AgentSession> sessions) {
   final byKey = <String, ProjectGroup>{};
   for (final s in sessions) {
@@ -139,25 +149,15 @@ List<ProjectGroup> groupByProject(Iterable<AgentSession> sessions) {
     );
     g.sessions.add(s);
   }
-  int rank(AgentSession s) => switch (groupOf(s)) {
-    SessionGroup.needsAnswer => 0,
-    SessionGroup.working => 1,
-    SessionGroup.done => 2,
-  };
-  int byTime(DateTime? a, DateTime? b) => (b ?? DateTime.fromMillisecondsSinceEpoch(0)).compareTo(a ?? DateTime.fromMillisecondsSinceEpoch(0));
   for (final g in byKey.values) {
-    g.sessions.sort((a, b) {
-      final r = rank(a).compareTo(rank(b));
-      return r != 0 ? r : byTime(a.updatedAt, b.updatedAt);
-    });
+    g.sessions.sort(compareSessions);
   }
   final list = byKey.values.toList()
     ..sort((a, b) {
-      final att = (b.needsAnswer > 0 ? 1 : 0).compareTo(a.needsAnswer > 0 ? 1 : 0);
-      if (att != 0) return att;
-      final t = byTime(a.latest, b.latest);
-      if (t != 0) return t;
-      return a.label.compareTo(b.label);
+      final l = a.label.toLowerCase().compareTo(b.label.toLowerCase());
+      if (l != 0) return l;
+      final m = a.label.compareTo(b.label);
+      return m != 0 ? m : a.hostId.compareTo(b.hostId);
     });
   return list;
 }
