@@ -2,6 +2,7 @@
 
 import 'dart:async';
 
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -40,10 +41,45 @@ class _ChatTabState extends ConsumerState<ChatTab> {
   final _attachments = AttachmentsController();
   bool _sending = false;
   String? _progress;
-  int _lastCount = 0;
+  // True while the list is pinned to its newest line; scrolling up releases
+  // it and coming back to the bottom (or the button) pins it again.
+  bool _follow = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (!_scroll.hasClients) return;
+    final atEnd = _scroll.position.maxScrollExtent - _scroll.position.pixels <= 24;
+    // Only a finger or wheel releases the follow; layout growth never does.
+    final byUser = _scroll.position.userScrollDirection != ScrollDirection.idle;
+    if (atEnd && !_follow) {
+      setState(() => _follow = true);
+    } else if (!atEnd && _follow && byUser) {
+      setState(() => _follow = false);
+    }
+  }
+
+  void _jumpToEnd() {
+    setState(() => _follow = true);
+    _pinToEnd();
+  }
+
+  void _pinToEnd({int again = 1}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scroll.hasClients) return;
+      _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      // Lazy children change the extent once laid out: settle once more.
+      if (again > 0 && _follow) _pinToEnd(again: again - 1);
+    });
+  }
 
   @override
   void dispose() {
+    _scroll.removeListener(_onScroll);
     _attachments.dispose();
     _input.dispose();
     _scroll.dispose();
@@ -74,6 +110,7 @@ class _ChatTabState extends ConsumerState<ChatTab> {
       }
       uploading = false;
       await repo.prompt(widget.session, composePrompt(text, paths));
+      _follow = true;
       _input.clear();
       _attachments.clear();
     } catch (e) {
@@ -172,14 +209,6 @@ class _ChatTabState extends ConsumerState<ChatTab> {
     }
   }
 
-  void _scrollToEndIfGrown(int count) {
-    if (count == _lastCount) return;
-    _lastCount = count;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scroll.hasClients) _scroll.jumpTo(_scroll.position.maxScrollExtent);
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final view = widget.view;
@@ -187,7 +216,7 @@ class _ChatTabState extends ConsumerState<ChatTab> {
     final pending = widget.session.pending;
     final inbox = ref.watch(inboxProvider(widget.session.hostId)).value ?? const <MailMessage>[];
     final queued = inbox.where((m) => m.to == widget.session.name && m.state == MailState.queued).length;
-    _scrollToEndIfGrown(items.length + (pending == null ? 0 : 1));
+    if (_follow) _pinToEnd();
 
     final children = <Widget>[];
     for (var i = 0; i < items.length; i++) {
@@ -218,7 +247,25 @@ class _ChatTabState extends ConsumerState<ChatTab> {
               ? Center(
                   child: Text('No se pudo cargar la vista', style: AppText.body.copyWith(color: AppColors.danger)),
                 )
-              : ListView(controller: _scroll, padding: const EdgeInsets.fromLTRB(16, 16, 16, 8), children: children),
+              : Stack(
+                  children: [
+                    ListView(controller: _scroll, padding: const EdgeInsets.fromLTRB(16, 16, 16, 8), children: children),
+                    if (!_follow)
+                      Positioned(
+                        right: 16,
+                        bottom: 12,
+                        child: RoundIconButton(
+                          icon: Icons.arrow_downward,
+                          label: 'Ir al final',
+                          bg: AppColors.surface,
+                          border: AppColors.border,
+                          fg: AppColors.secondary,
+                          iconSize: 20,
+                          onPressed: _jumpToEnd,
+                        ),
+                      ),
+                  ],
+                ),
         ),
         Container(
           decoration: BoxDecoration(

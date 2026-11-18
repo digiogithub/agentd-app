@@ -50,7 +50,7 @@ void main() {
   });
 
   testWidgets('the permission card shows the command from the classification', (tester) async {
-    await pumpUi(tester, const Scaffold(body: AgentsScreen()));
+    await pumpUi(tester, const Scaffold(body: AgentsScreen()), extraOverrides: [initialSettingsProvider.overrideWithValue(const AppSettings(agentsGrouping: AgentsGrouping.status))]);
     expect(find.text('go test ./internal/... -race'), findsOneWidget);
     expect(find.text('Do you want to proceed?'), findsOneWidget);
   });

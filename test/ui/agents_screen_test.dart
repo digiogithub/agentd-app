@@ -42,7 +42,7 @@ void main() {
   });
 
   testWidgets('Denegar picks the deny option', (tester) async {
-    final f = await pumpUi(tester, const Scaffold(body: AgentsScreen()));
+    final f = await pumpUi(tester, const Scaffold(body: AgentsScreen()), extraOverrides: byStatus);
     await tester.tap(find.text('Denegar'));
     await settle(tester);
     expect(f.sessions.calls.single.arg, 'o-no');

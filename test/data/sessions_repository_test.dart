@@ -213,6 +213,11 @@ void main() {
     final s = byName(l, 'codex@api')!;
     await repo.prompt(s, 'add tests');
     expect(d.lastArgs('act'), containsPair('text', 'add tests'));
+    // A working agent takes the message mid-turn (force), an idle one is asked normally.
+    await repo.prompt(AgentSession(hostId: s.hostId, source: s.source, name: s.name, status: AgentStatus.working), 'and docs');
+    expect(d.lastArgs('act'), containsPair('force', true));
+    await repo.prompt(AgentSession(hostId: s.hostId, source: s.source, name: s.name, status: AgentStatus.idle), 'ok');
+    expect(d.lastArgs('act').containsKey('force'), isFalse);
     await repo.keys(s, ['esc']);
     expect(d.lastArgs('act')['keys'], ['esc']);
     await repo.interrupt(s);

@@ -342,7 +342,8 @@ class LiveSessionsRepository implements SessionsRepository {
   @override
   Future<void> prompt(AgentSession s, String text) async {
     final c = await _clientOf(s);
-    await c.prompt(s.name, text);
+    // Most agents take a message in the middle of a turn: do not wait for idle.
+    await c.prompt(s.name, text, force: s.status == AgentStatus.working);
     _refreshFeed(s.key, now: true);
   }
 

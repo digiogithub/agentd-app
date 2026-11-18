@@ -45,6 +45,7 @@ final linuxFull = [
   ),
   section('tool opencode', 'path=/home/u/.local/bin/opencode\nversion=1.0.12'),
   section('tool gemini', 'path=/home/u/.local/bin/gemini\nversion=0.15.0'),
+  section('tool grok', 'path=/home/u/.local/bin/grok\nversion=0.3.1'),
   section(
     'socket',
     'live=/run/user/1000/agentd/agentd.sock\nlive=/run/user/1000/agentd/agentd.sock\ndefault=/run/user/1000/agentd/agentd.sock',
@@ -72,6 +73,7 @@ final macArm = [
   section('tool pando'),
   section('tool opencode'),
   section('tool gemini'),
+  section('tool grok'),
   section('socket', 'default=/tmp/agentd-501/agentd.sock'),
   section('end'),
 ].join();

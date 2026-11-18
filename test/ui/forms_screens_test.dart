@@ -19,7 +19,7 @@ void main() {
       expect(find.text('agentd 0.6.2 · SSH'), findsOneWidget);
       expect(find.textContaining('Recomendado: vista chat'), findsOneWidget);
       expect(find.text('instalado · 2.4'), findsOneWidget);
-      expect(find.text('Instalar…'), findsNWidgets(2)); // opencode, gemini
+      expect(find.text('Instalar…'), findsNWidgets(3)); // opencode, gemini, grok
       expect(find.text('Se creará claude@webapp'), findsOneWidget);
 
       await tester.tap(find.text('Codex'));
