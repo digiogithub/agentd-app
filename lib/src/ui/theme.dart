@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../core/contracts.dart';
-import 'providers.dart' show ThemeChoice;
+import 'providers.dart' show ChatFont, ThemeChoice;
 
 /// Every color of the app for one brightness. Names follow their role.
 class AppPalette {
@@ -202,6 +202,20 @@ abstract final class AppFonts {
   static TextStyle mono({double size = 13, FontWeight weight = FontWeight.w400, Color? color, double? height}) {
     final base = TextStyle(fontSize: size, fontWeight: weight, color: color ?? AppColors.secondary, height: height);
     return _google ? GoogleFonts.jetBrainsMono(textStyle: base) : base.copyWith(fontFamily: 'JetBrains Mono', fontFamilyFallback: const ['monospace']);
+  }
+
+  /// Chat prose in the chosen [ChatFont]: Inter, Noto Serif (the system
+  /// serif without runtime fetching) or JetBrains Mono.
+  static TextStyle chat(ChatFont font, {required double size, FontWeight weight = FontWeight.w400, Color? color, double? height}) {
+    switch (font) {
+      case ChatFont.sans:
+        return inter(size: size, weight: weight, color: color, height: height);
+      case ChatFont.mono:
+        return mono(size: size, weight: weight, color: color ?? AppColors.text, height: height);
+      case ChatFont.serif:
+        final base = TextStyle(fontSize: size, fontWeight: weight, color: color ?? AppColors.text, height: height);
+        return _google ? GoogleFonts.notoSerif(textStyle: base) : base.copyWith(fontFamily: 'serif');
+    }
   }
 
   static String get monoFamily => _google ? GoogleFonts.jetBrainsMono().fontFamily ?? 'monospace' : 'monospace';

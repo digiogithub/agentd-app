@@ -154,7 +154,7 @@ class AgentdClient {
 
   /// Semantic view. With [sinceRevision] + [epoch] still current the answer
   /// has `notModified` and only name/epoch/revision.
-  Future<AgentdView> view(String name, {int? sinceRevision, String? epoch, int? linesLimit, int? fromLine, bool scrollback = false}) async {
+  Future<AgentdView> view(String name, {int? sinceRevision, String? epoch, int? linesLimit, int? fromLine, bool scrollback = false, bool markup = false}) async {
     final args = <String, Object?>{
       'name': name,
       if (sinceRevision != null && sinceRevision > 0) 'since_revision': sinceRevision,
@@ -162,6 +162,7 @@ class AgentdClient {
       if (linesLimit != null && linesLimit > 0) 'lines_limit': linesLimit,
       'from_line': ?fromLine,
       if (scrollback) 'scrollback': true,
+      if (markup) 'markup': true,
     };
     return AgentdView.fromJson(await _callMap('view', args), name: name);
   }

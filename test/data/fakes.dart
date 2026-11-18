@@ -151,6 +151,15 @@ class StubHosts implements HostsRepository {
   Future<void> connect(String hostId) async {}
 
   @override
+  Future<void> disconnect(String hostId) async {}
+
+  @override
+  Future<void> disconnectAll() async {}
+
+  @override
+  Future<void> reconnectAll() async {}
+
+  @override
   Future<String> publicKey() async => 'ssh-ed25519 AAAA test';
 
   @override

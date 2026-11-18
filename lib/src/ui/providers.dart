@@ -10,6 +10,7 @@
 //     hostKeyPromptsProvider.overrideWithValue(data.hostKeyPrompts),
 //   ], child: const AgentdApp())
 
+import '../platform/background.dart';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -24,6 +25,10 @@ final mailRepositoryProvider = Provider<MailRepository>((ref) => FakeMailReposit
 final provisionServiceProvider = Provider<ProvisionService>((ref) => FakeProvisionService());
 
 /// New host keys waiting for the user's decision (TOFU dialog, see app.dart).
+/// Android background connection + notifications (main.dart overrides it on
+/// Android); a no-op elsewhere and in tests.
+final backgroundBridgeProvider = Provider<BackgroundBridge>((ref) => NoopBackgroundBridge());
+
 final hostKeyPromptsProvider = Provider<HostKeyPrompts>((ref) => HostKeyPrompts());
 
 /// Saved hosts with their live state.
@@ -70,6 +75,9 @@ class AppSettings {
     this.theme = ThemeChoice.dark,
     this.muted = const [MutedSession('claude@docs', 'hasta mañana')],
     this.agentsGrouping = AgentsGrouping.project,
+    this.chatFontSize = kDefaultChatFontSize,
+    this.chatFont = ChatFont.sans,
+    this.keepConnected = true,
   });
 
   final bool notifyWaiting;
@@ -81,6 +89,17 @@ class AppSettings {
   final List<MutedSession> muted;
   final AgentsGrouping agentsGrouping;
 
+  /// Size of the chat view's prose (kMinChatFontSize..kMaxChatFontSize).
+  final double chatFontSize;
+
+  /// Font of the chat view's prose.
+  final ChatFont chatFont;
+
+  /// Android: while a host is online keep a "connected" notification (a
+  /// foreground service) so connections and agent notifications survive in
+  /// the background.
+  final bool keepConnected;
+
   AppSettings copyWith({
     bool? notifyWaiting,
     bool? notifyTurnDone,
@@ -90,6 +109,9 @@ class AppSettings {
     ThemeChoice? theme,
     List<MutedSession>? muted,
     AgentsGrouping? agentsGrouping,
+    double? chatFontSize,
+    ChatFont? chatFont,
+    bool? keepConnected,
   }) => AppSettings(
     notifyWaiting: notifyWaiting ?? this.notifyWaiting,
     notifyTurnDone: notifyTurnDone ?? this.notifyTurnDone,
@@ -99,8 +121,25 @@ class AppSettings {
     theme: theme ?? this.theme,
     muted: muted ?? this.muted,
     agentsGrouping: agentsGrouping ?? this.agentsGrouping,
+    chatFontSize: chatFontSize ?? this.chatFontSize,
+    chatFont: chatFont ?? this.chatFont,
+    keepConnected: keepConnected ?? this.keepConnected,
   );
 }
+
+const double kDefaultChatFontSize = 14.5;
+const double kMinChatFontSize = 11;
+const double kMaxChatFontSize = 24;
+
+/// Chat prose fonts: Inter, a serif (Noto Serif), JetBrains Mono.
+enum ChatFont { sans, serif, mono }
+
+/// Label of a chat font.
+String chatFontLabel(ChatFont f) => switch (f) {
+  ChatFont.sans => 'Sans',
+  ChatFont.serif => 'Serif',
+  ChatFont.mono => 'Mono',
+};
 
 extension AppSettingsJson on AppSettings {
   Map<String, Object?> toJson() => {
@@ -112,6 +151,9 @@ extension AppSettingsJson on AppSettings {
     'theme': theme.name,
     'muted': [for (final m in muted) {'session': m.session, 'until': m.until}],
     'agentsGrouping': agentsGrouping.name,
+    'chatFontSize': chatFontSize,
+    'chatFont': chatFont.name,
+    'keepConnected': keepConnected,
   };
 }
 
@@ -121,6 +163,9 @@ AppSettings appSettingsFromJson(Object? json, {AppSettings fallback = const AppS
   bool b(String k, bool d) => json[k] is bool ? json[k] as bool : d;
   final theme = ThemeChoice.values.where((t) => t.name == json['theme']).firstOrNull ?? fallback.theme;
   final grouping = AgentsGrouping.values.where((g) => g.name == json['agentsGrouping']).firstOrNull ?? fallback.agentsGrouping;
+  final chatFont = ChatFont.values.where((f) => f.name == json['chatFont']).firstOrNull ?? fallback.chatFont;
+  final size = json['chatFontSize'];
+  final chatFontSize = size is num ? size.toDouble().clamp(kMinChatFontSize, kMaxChatFontSize) : fallback.chatFontSize;
   final muted = <MutedSession>[];
   if (json['muted'] is List) {
     for (final m in json['muted'] as List) {
@@ -136,6 +181,9 @@ AppSettings appSettingsFromJson(Object? json, {AppSettings fallback = const AppS
     theme: theme,
     muted: json['muted'] is List ? muted : fallback.muted,
     agentsGrouping: grouping,
+    chatFontSize: chatFontSize,
+    chatFont: chatFont,
+    keepConnected: b('keepConnected', fallback.keepConnected),
   );
 }
 

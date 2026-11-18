@@ -161,6 +161,21 @@ void main() {
     expect(items.single.meta, 'ok  github.com/x/y  0.4s');
   });
 
+  test('agent text uses the chat markup; tools stay plain', () {
+    final items = chatItemsFromLines(const [
+      AgentdViewLine('● No por ahora. Chunking', 'transcript', md: '● **No por ahora.** Chunking'),
+      AgentdViewLine('', 'transcript'),
+      AgentdViewLine('  Antes de RAG', 'transcript', md: '  ### Antes de RAG'),
+      AgentdViewLine('  - usa grant_call_id', 'transcript', md: '  - usa `grant_call_id`'),
+      AgentdViewLine('● Bash(ls *.go)', 'transcript'),
+    ]);
+    expect(items.first.role, ChatRole.agent);
+    expect(items.first.text, '**No por ahora.** Chunking\n\n### Antes de RAG\n- usa `grant_call_id`');
+    expect(items.last.role, ChatRole.tool);
+    expect(AgentdViewLine.fromJson({'text': 'a', 'role': 'transcript', 'md': '**a**'}).markup, '**a**');
+    expect(const AgentdViewLine('a*b', 'transcript').markup, 'a*b');
+  });
+
   test('mail and queues', () {
     final m = toMailMessage(AgentdMessage.fromJson(messageJson(state: 'unclaimed', queue: 'review')));
     expect((m.id, m.from, m.to, m.state, m.queue), (5, 'codex@api', 'queue:review', MailState.unclaimed, 'review'));

@@ -12,6 +12,15 @@ void main() {
     expect(back.muted.single.until, '1 h');
   });
 
+  test('chat font settings round trip and are clamped', () {
+    const s = AppSettings(chatFontSize: 18, chatFont: ChatFont.serif, muted: []);
+    final back = appSettingsFromJson(s.toJson());
+    expect((back.chatFontSize, back.chatFont), (18.0, ChatFont.serif));
+    final bad = appSettingsFromJson({'chatFontSize': 99, 'chatFont': 'comic'});
+    expect((bad.chatFontSize, bad.chatFont), (kMaxChatFontSize, ChatFont.sans));
+    expect(appSettingsFromJson({}).chatFontSize, kDefaultChatFontSize);
+  });
+
   test('broken or missing settings fall back to defaults without sample mutes', () {
     expect(appSettingsFromJson(null).muted, isEmpty);
     final s = appSettingsFromJson({'theme': 'neon', 'notifyWaiting': 'yes', 'muted': 3});

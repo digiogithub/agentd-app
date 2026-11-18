@@ -1,7 +1,9 @@
+import 'package:agentd_app/src/ui/providers.dart';
 import 'package:agentd_app/src/ui/screens/mailbox_screen.dart';
 import 'package:agentd_app/src/ui/screens/settings_screen.dart';
 import 'package:agentd_app/src/ui/widgets/dictation/dictation_providers.dart';
 import 'package:agentd_app/src/ui/widgets/dictation/dictation_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -67,9 +69,23 @@ void main() {
       expect(find.text('claude@docs'), findsNothing);
       expect(find.text('Ninguna sesión silenciada'), findsOneWidget);
 
+      await tester.scrollUntilVisible(find.text('Sistema'), 200, scrollable: find.byType(Scrollable).first);
       await tester.tap(find.text('Sistema'));
       await tester.pump();
       expect(find.textContaining('llegará pronto'), findsNothing);
+    });
+
+    testWidgets('chat text size and font', (tester) async {
+      await pumpUi(tester, const Scaffold(body: SettingsScreen()), height: 1100);
+      await tester.scrollUntilVisible(find.text('Tipo de letra'), 200, scrollable: find.byType(Scrollable).first);
+      expect(find.text('14.5 pt'), findsOneWidget);
+      await tester.tap(find.bySemanticsLabel('Texto más grande'));
+      await tester.pump();
+      expect(find.text('15.5 pt'), findsOneWidget);
+      await tester.tap(find.text('Serif'));
+      await tester.pump();
+      final c = ProviderScope.containerOf(tester.element(find.byType(SettingsScreen)));
+      expect((c.read(settingsProvider).chatFontSize, c.read(settingsProvider).chatFont), (15.5, ChatFont.serif));
     });
 
     testWidgets('picks and persists the dictation language', (tester) async {

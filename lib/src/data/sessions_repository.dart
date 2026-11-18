@@ -852,7 +852,7 @@ class _Feed {
           ack = false;
           host.client.viewAck(base.name).ignore();
         }
-        final v = await host.client.view(base.name, sinceRevision: _revision, epoch: _epoch, linesLimit: repo.viewLines);
+        final v = await host.client.view(base.name, sinceRevision: _revision, epoch: _epoch, linesLimit: repo.viewLines, markup: true);
         apply(v);
       } while (_again && listeners.isNotEmpty);
     } catch (e) {

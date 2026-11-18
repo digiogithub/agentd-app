@@ -78,6 +78,37 @@ class FakeHostsRepository implements HostsRepository {
     _changes.add(null);
   }
 
+  /// Hosts closed with [disconnect], in order.
+  final List<String> disconnected = [];
+
+  @override
+  Future<void> disconnect(String hostId) async {
+    disconnected.add(hostId);
+    final i = _hosts.indexWhere((h) => h.config.id == hostId);
+    if (i < 0) return;
+    final h = _hosts[i];
+    _hosts[i] = HostStatus(h.config, capabilities: h.capabilities, sessionCount: h.sessionCount);
+    _changes.add(null);
+  }
+
+  @override
+  Future<void> disconnectAll() async {
+    for (final h in [..._hosts]) {
+      await disconnect(h.config.id);
+    }
+  }
+
+  /// Times [reconnectAll] was called.
+  int reconnects = 0;
+
+  @override
+  Future<void> reconnectAll() async {
+    reconnects++;
+    for (final h in [..._hosts]) {
+      if (h.state != HostState.online) await connect(h.config.id);
+    }
+  }
+
   @override
   Future<String> publicKey() async => fakePublicKey;
 

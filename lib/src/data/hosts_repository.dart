@@ -74,6 +74,13 @@ class SshHostsRepository implements HostsRepository {
   final Map<String, Future<void>> _connecting = {};
   final Map<String, Timer> _retry = {};
   final Map<String, int> _attempts = {};
+
+  /// Hosts the user disconnected: no automatic reconnect until [connect] or
+  /// [reconnectAll].
+  final Set<String> _off = {};
+
+  /// Timeout of the liveness check of [reconnectAll].
+  Duration probeTimeout = const Duration(seconds: 6);
   final _changes = StreamController<void>.broadcast();
   Future<void>? _loaded;
   bool _disposed = false;
@@ -151,6 +158,7 @@ class SshHostsRepository implements HostsRepository {
   @override
   Future<void> connect(String hostId) async {
     await _load();
+    _off.remove(hostId);
     final pending = _connecting[hostId];
     if (pending != null) return pending;
     final f = _connect(hostId, detect: true);
@@ -204,14 +212,14 @@ class SshHostsRepository implements HostsRepository {
   void _watchClose(String hostId, RemoteShell shell) {
     if (shell is! SshRemoteShell) return;
     shell.done.then((_) {
-      if (_disposed || !_hosts.containsKey(hostId) || _pool.current(hostId) != null) return;
+      if (_disposed || !_hosts.containsKey(hostId) || _off.contains(hostId) || _pool.current(hostId) != null) return;
       _set(hostId, (h) => HostStatus(h.config, state: HostState.offline, capabilities: h.capabilities, error: 'Conexión perdida'));
       _scheduleReconnect(hostId);
     });
   }
 
   void _scheduleReconnect(String hostId) {
-    if (!autoConnect || _disposed || reconnectBackoff.isEmpty) return;
+    if (!autoConnect || _disposed || reconnectBackoff.isEmpty || _off.contains(hostId)) return;
     final n = _attempts[hostId] = (_attempts[hostId] ?? 0) + 1;
     final d = reconnectBackoff[(n - 1).clamp(0, reconnectBackoff.length - 1)];
     _retry[hostId]?.cancel();
@@ -220,6 +228,57 @@ class SshHostsRepository implements HostsRepository {
       if (_disposed || _pool.current(hostId) != null) return;
       _connect(hostId, detect: false).catchError((Object _) => _scheduleReconnect(hostId));
     });
+  }
+
+  @override
+  Future<void> disconnect(String hostId) async {
+    await _load();
+    if (!_hosts.containsKey(hostId)) return;
+    _off.add(hostId);
+    _retry.remove(hostId)?.cancel();
+    _attempts.remove(hostId);
+    await _pool.drop(hostId);
+    _set(hostId, (h) => HostStatus(h.config, state: HostState.offline, capabilities: h.capabilities));
+  }
+
+  @override
+  Future<void> disconnectAll() async {
+    await _load();
+    await Future.wait([for (final id in [..._order]) disconnect(id)]);
+  }
+
+  @override
+  Future<void> reconnectAll() async {
+    await _load();
+    final work = <Future<void>>[];
+    for (final id in [..._order]) {
+      _off.remove(id);
+      if (_connecting.containsKey(id)) continue;
+      final open = _pool.current(id);
+      if (open != null) {
+        work.add(_probe(id, open));
+        continue;
+      }
+      _retry.remove(id)?.cancel();
+      _attempts.remove(id);
+      work.add(connect(id).catchError((Object _) {}));
+    }
+    await Future.wait(work);
+  }
+
+  /// Runs a no-op on [shell]; a connection that does not answer in
+  /// [probeTimeout] (a socket the OS dropped while the app slept) is closed
+  /// and opened again.
+  Future<void> _probe(String hostId, RemoteShell shell) async {
+    var alive = false;
+    try {
+      alive = (await shell.exec('true', timeout: probeTimeout).timeout(probeTimeout + const Duration(seconds: 1))).ok;
+    } catch (_) {}
+    if (alive || _disposed) return;
+    await _pool.drop(hostId);
+    _retry.remove(hostId)?.cancel();
+    _attempts.remove(hostId);
+    await connect(hostId).catchError((Object _) {});
   }
 
   @override

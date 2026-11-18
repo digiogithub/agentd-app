@@ -253,7 +253,8 @@ final RegExp _decor = RegExp(r'^[\s─━│┃╭╮╰╯┌┐└┘├┤┬
 /// [PendingInteraction]); a `gap` becomes a system item. Lines starting with
 /// a prompt marker open a user item, bullets open an agent (or tool, when
 /// the bullet is a `Name(args)` call) item, `⎿` lines and plain lines extend
-/// the current item.
+/// the current item. Agent text is chat markup (the lines' `md`, see
+/// [AgentdViewLine.markup]); user and tool text stay plain.
 List<ChatItem> chatItemsFromLines(List<AgentdViewLine> lines, {String? harness}) {
   final items = <ChatItem>[];
   ChatRole? role;
@@ -286,6 +287,8 @@ List<ChatItem> chatItemsFromLines(List<AgentdViewLine> lines, {String? harness})
     }
     if (l.role != 'transcript') continue;
     final text = l.text.trimRight();
+    // Agent prose keeps the line's chat markup (headings, bold, code).
+    final md = l.markup.trimRight();
     if (text.isNotEmpty && _decor.hasMatch(text)) continue;
 
     final u = _userLine.firstMatch(text);
@@ -307,7 +310,7 @@ List<ChatItem> chatItemsFromLines(List<AgentdViewLine> lines, {String? harness})
         if (arg.isNotEmpty) buf.add(arg);
       } else {
         role = ChatRole.agent;
-        buf.add(body);
+        buf.add(_bulletLine.firstMatch(md)?.group(1)!.trim() ?? body);
       }
       continue;
     }
@@ -325,7 +328,7 @@ List<ChatItem> chatItemsFromLines(List<AgentdViewLine> lines, {String? harness})
       if (text.trim().isEmpty) continue;
       role = ChatRole.agent;
     }
-    buf.add(_dedent(text));
+    buf.add(_dedent(role == ChatRole.agent ? md : text));
   }
   flush();
   return items;

@@ -10,6 +10,7 @@ import '../../core/contracts.dart';
 import '../../agentd/errors.dart';
 import '../chat/chat_table_view.dart';
 import '../chat/linkified_text.dart';
+import '../chat/markup_text.dart';
 import '../chat/table_parser.dart';
 import '../format.dart';
 import '../widgets/attachments/attachment.dart';
@@ -461,7 +462,12 @@ class ChatItemView extends StatelessWidget {
                   bottomRight: Radius.circular(6),
                 ),
               ),
-              child: LinkifiedText(item.text, style: AppFonts.inter(size: 14.5, height: 1.45)),
+              child: Consumer(
+                builder: (context, ref, _) {
+                  final font = ref.watch(settingsProvider.select((s) => (s.chatFont, s.chatFontSize)));
+                  return LinkifiedText(item.text, style: AppFonts.chat(font.$1, size: font.$2, height: 1.45));
+                },
+              ),
             ),
           ),
         );
@@ -664,14 +670,15 @@ class _PendingCardState extends State<PendingCard> {
 }
 
 /// Agent text: prose with links and code, and tables as real tables.
-class _AgentText extends StatelessWidget {
+class _AgentText extends ConsumerWidget {
   const _AgentText(this.text);
   final String text;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final font = ref.watch(settingsProvider.select((s) => (s.chatFont, s.chatFontSize)));
     final segs = parseChatSegments(text);
-    Widget prose(String t) => LinkifiedText(t, style: AppFonts.inter(size: 14.5, height: 1.5), codeColor: AppColors.accentLight, codeSize: 13);
+    Widget prose(String t) => MarkupText(t, style: AppFonts.chat(font.$1, size: font.$2, height: 1.5), codeColor: AppColors.accentLight);
     if (segs.length <= 1 && (segs.isEmpty || segs.first is TextSegment)) return prose(text);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -680,7 +687,12 @@ class _AgentText extends StatelessWidget {
           if (i > 0) const SizedBox(height: 8),
           switch (s) {
             TextSegment() => prose(s.text),
-            TableSegment() => ChatTableView(table: s.table),
+            TableSegment() => ChatTableView(
+              table: ChatTable(
+                header: s.table.header?.map(unmarkup).toList(),
+                rows: [for (final r in s.table.rows) r.map(unmarkup).toList()],
+              ),
+            ),
           },
         ],
       ],

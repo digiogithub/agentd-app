@@ -191,4 +191,60 @@ void main() {
       expect(File('${home.path}/.ssh/authorized_keys').existsSync(), isFalse);
     });
   });
+
+  group('foreground reconnect and manual disconnect', () {
+    test('disconnect closes and stays closed; reconnectAll opens it again', () async {
+      final r = repo(auto: true);
+      final seen = <List<HostStatus>>[];
+      final sub = r.watch().listen(seen.add);
+      await r.save(cfg);
+      await r.connect('mini');
+      final first = shell;
+      await r.disconnect('mini');
+      await eventually(() => seen.last.single.state == HostState.offline);
+      expect(first.isClosed, isTrue);
+      expect(seen.last.single.error, isNull);
+      final n = connects.length;
+      shell = DataShell();
+      await r.reconnectAll();
+      expect(connects.length, n + 1);
+      await eventually(() => seen.last.single.state == HostState.online);
+      await sub.cancel();
+      await r.dispose();
+    });
+
+    test('a live connection is probed and kept; a dead one is reopened', () async {
+      final r = repo();
+      final seen = <List<HostStatus>>[];
+      final sub = r.watch().listen(seen.add);
+      await r.save(cfg);
+      await r.connect('mini');
+      final n = connects.length;
+      await r.reconnectAll();
+      expect(connects.length, n, reason: 'alive: no new connection');
+      expect(shell.commands, contains('true'));
+
+      shell.on(RegExp(r'^true$'), const ExecResult(255, '', 'broken pipe'));
+      final dead = shell;
+      shell = DataShell();
+      await r.reconnectAll();
+      expect(connects.length, n + 1);
+      expect(dead.isClosed, isTrue);
+      await eventually(() => seen.last.single.state == HostState.online);
+      await sub.cancel();
+      await r.dispose();
+    });
+
+    test('reconnectAll connects hosts that failed, without waiting for the backoff', () async {
+      final r = repo(auto: true);
+      await r.save(cfg);
+      connectError = const SocketException('down');
+      await expectLater(r.connect('mini'), throwsA(isA<SocketException>()));
+      connectError = null;
+      final n = connects.length;
+      await r.reconnectAll();
+      expect(connects.length, n + 1);
+      await r.dispose();
+    });
+  });
 }

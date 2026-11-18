@@ -7,7 +7,9 @@ import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:material_ui/material_ui.dart';
 
 import '../core/contracts.dart';
+import 'background_controller.dart';
 import 'providers.dart';
+import 'screens/session_screen.dart';
 import 'screens/agents_screen.dart';
 import 'screens/hosts_screen.dart';
 import 'screens/mailbox_screen.dart';
@@ -34,10 +36,21 @@ class _AgentdAppState extends ConsumerState<AgentdApp>
   Brightness get _platform =>
       WidgetsBinding.instance.platformDispatcher.platformBrightness;
 
+  late final BackgroundController _background;
+  StreamSubscription<String>? _opens;
+  final _navigator = GlobalKey<NavigatorState>();
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _background = BackgroundController(
+      hosts: ref.read(hostsRepositoryProvider),
+      sessions: ref.read(sessionsRepositoryProvider),
+      bridge: ref.read(backgroundBridgeProvider),
+      settings: () => ref.read(settingsProvider),
+    )..start();
+    _opens = _background.opens.listen(_openSession);
     // First frame: nothing is built yet, so no repaint walk is needed.
     AppColors.palette = AppPalette.resolve(
       ref.read(settingsProvider).theme,
@@ -48,7 +61,29 @@ class _AgentdAppState extends ConsumerState<AgentdApp>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _opens?.cancel();
+    unawaited(_background.dispose());
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _background.setForeground(true);
+      case AppLifecycleState.paused || AppLifecycleState.hidden || AppLifecycleState.detached:
+        _background.setForeground(false);
+      case AppLifecycleState.inactive:
+        break; // notification shade, app switcher: still on screen
+    }
+  }
+
+  /// A tapped agent notification: open that session.
+  void _openSession(String key) {
+    final s = ref.read(sessionsProvider).value?.where((x) => x.key == key).firstOrNull;
+    final nav = _navigator.currentState;
+    if (s == null || nav == null) return;
+    nav.push(MaterialPageRoute<void>(builder: (_) => SessionScreen(session: s)));
   }
 
   @override
@@ -77,6 +112,7 @@ class _AgentdAppState extends ConsumerState<AgentdApp>
   @override
   Widget build(BuildContext context) {
     ref.listen(settingsProvider.select((s) => s.theme), (_, t) => _apply(t));
+    ref.listen(settingsProvider.select((s) => s.keepConnected), (_, _) => _background.settingsChanged());
     final p = AppColors.palette;
     final dark = p.brightness == Brightness.dark;
     final theme = buildAppTheme(p);
@@ -91,6 +127,7 @@ class _AgentdAppState extends ConsumerState<AgentdApp>
             : Brightness.dark,
       ),
       child: MaterialApp(
+        navigatorKey: _navigator,
         title: 'agentd',
         debugShowCheckedModeBanner: false,
         theme: theme,

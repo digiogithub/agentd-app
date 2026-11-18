@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../providers.dart';
 import '../theme.dart';
+import '../widgets/chat_font_controls.dart';
 import '../widgets/common.dart';
 import '../widgets/dictation/dictation_providers.dart';
 
@@ -209,6 +210,21 @@ class SettingsScreen extends ConsumerWidget {
                     () => _pickDictationLocale(context, ref),
                   ),
                 ]),
+                const SizedBox(height: 18),
+                const SectionLabel('Segundo plano'),
+                const SizedBox(height: 8),
+                group([
+                  SwitchRow(
+                    title: 'Mantener conexión en segundo plano',
+                    subtitle: 'Notificación fija mientras haya un host conectado: la conexión y los avisos siguen con la app en segundo plano. Desde ella puedes desconectar.',
+                    value: s.keepConnected,
+                    onChanged: (v) => n.update((x) => x.copyWith(keepConnected: v)),
+                  ),
+                ]),
+                const SizedBox(height: 18),
+                const SectionLabel('Vista chat'),
+                const SizedBox(height: 8),
+                group([const ChatFontControls()], padding: const EdgeInsets.all(14)),
                 const SizedBox(height: 18),
                 const SectionLabel('Apariencia'),
                 const SizedBox(height: 8),

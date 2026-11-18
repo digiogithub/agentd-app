@@ -1,7 +1,10 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'src/data/data.dart';
+import 'src/platform/background.dart';
 import 'src/ui/app.dart';
 import 'src/ui/providers.dart';
 
@@ -32,6 +35,7 @@ Widget buildApp({AppData? data, SettingsStore? settingsStore, AppSettings? setti
       mailRepositoryProvider.overrideWithValue(data.mail),
       provisionServiceProvider.overrideWithValue(data.provision),
       hostKeyPromptsProvider.overrideWithValue(data.hostKeyPrompts),
+      if (Platform.isAndroid) backgroundBridgeProvider.overrideWithValue(MethodChannelBackgroundBridge()),
     ],
     child: const AgentdApp(),
   );

@@ -10,6 +10,7 @@ import '../format.dart';
 import '../providers.dart';
 import '../terminate.dart';
 import '../theme.dart';
+import '../widgets/chat_font_controls.dart';
 import '../widgets/common.dart';
 import 'chat_tab.dart';
 import 'mailbox_screen.dart';
@@ -262,6 +263,15 @@ class _MoreMenu extends StatelessWidget {
                   onMailbox!();
                 },
               ),
+            ListTile(
+              leading: Icon(Icons.text_fields, color: AppColors.secondary),
+              title: Text('Texto del chat', style: AppFonts.inter(size: 15)),
+              subtitle: Text('Tamaño y tipo de letra', style: AppText.caption),
+              onTap: () {
+                Navigator.pop(ctx);
+                showChatFontSheet(context);
+              },
+            ),
             ListTile(
               leading: Icon(Icons.delete_forever_outlined, color: AppColors.danger),
               title: Text('Terminar', style: AppFonts.inter(size: 15, color: AppColors.danger)),

@@ -323,6 +323,19 @@ abstract class HostsRepository {
   Future<void> remove(String hostId);
   Future<void> connect(String hostId);
 
+  /// Closes the connection of [hostId] and keeps it closed (no automatic
+  /// reconnect) until [connect] or [reconnectAll].
+  Future<void> disconnect(String hostId);
+
+  /// [disconnect] for every saved host.
+  Future<void> disconnectAll();
+
+  /// Back in the foreground: checks the open connections (a cheap command
+  /// with a short timeout; a dead one is dropped and reopened) and connects
+  /// every other saved host at once, without waiting for the reconnect
+  /// backoff. Hosts closed with [disconnect] are connected too.
+  Future<void> reconnectAll();
+
   /// The open shell of [hostId], connecting when needed (provisioning,
   /// agentd socket, multiplexers).
   Future<RemoteShell> shell(String hostId);

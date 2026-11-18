@@ -200,9 +200,16 @@ class AgentdAttention {
 }
 
 class AgentdViewLine {
-  const AgentdViewLine(this.text, this.role);
-  factory AgentdViewLine.fromJson(Json j) => AgentdViewLine(_str(j['text']), _str(j['role']));
+  const AgentdViewLine(this.text, this.role, {this.md = ''});
+  factory AgentdViewLine.fromJson(Json j) => AgentdViewLine(_str(j['text']), _str(j['role']), md: _str(j['md']));
   final String text;
+
+  /// Chat markup of the line (view `markup: true`): CommonMark built from
+  /// the terminal styles; empty when it equals [text].
+  final String md;
+
+  /// [md], or [text] when the line has none.
+  String get markup => md.isNotEmpty ? md : text;
 
   /// transcript | status | dialog | gap
   final String role;
