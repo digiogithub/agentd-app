@@ -11,7 +11,7 @@ import '../widgets/common.dart';
 import 'add_host_screen.dart';
 import 'provision_screen.dart';
 
-const agentClis = ['claude', 'codex', 'pando', 'opencode', 'gemini'];
+const agentClis = ['claude', 'codex', 'pando', 'opencode', 'gemini', 'grok'];
 
 class HostsScreen extends ConsumerWidget {
   const HostsScreen({super.key});

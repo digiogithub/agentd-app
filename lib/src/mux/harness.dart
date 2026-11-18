@@ -9,6 +9,7 @@ const knownHarnesses = <String>{
   'pando',
   'opencode',
   'gemini',
+  'grok',
   'aider',
   'crush',
   'goose',

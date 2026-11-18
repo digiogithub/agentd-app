@@ -18,6 +18,7 @@ const detectTools = <String, String>{
   'pando': '--version',
   'opencode': '--version',
   'gemini': '--version',
+  'grok': '--version',
 };
 
 const marker = '@@agentd-app ';
@@ -29,13 +30,16 @@ const marker = '@@agentd-app ';
 /// `$HOME/.agentd-app-run5.$$`, removed afterwards) rather than a pipe: a
 /// grandchild it does not kill (the `sleep` of a shell wrapper) would keep
 /// the pipe open. Its `wait` discards stderr, where the shell reports the
-/// killed job ("Terminated"). `~/.local/bin`
-/// and `~/bin` are searched as well: non-interactive login shells often do
+/// killed job ("Terminated"). the user-level
+/// binary directories (`~/.local/bin`, `~/bin`, `~/.bun/bin`, `~/.cargo/bin`, nvm, ...)
+/// are searched as well: non-interactive login shells often do
 /// not have them on PATH, and that is where the installers put binaries.
 final String detectScript = () {
   final b = StringBuffer(r'''
 PATH0=$PATH
-PATH="$HOME/.local/bin:$HOME/bin:$PATH"; export PATH
+PATH="$HOME/.local/bin:$HOME/bin:$HOME/.bun/bin:$HOME/.cargo/bin:$HOME/.npm-global/bin:$HOME/.volta/bin:$HOME/.local/share/pnpm:$HOME/go/bin:$HOME/.deno/bin:$HOME/.local/share/mise/shims:$HOME/.asdf/shims:$PATH:/usr/local/bin:/opt/homebrew/bin:/home/linuxbrew/.linuxbrew/bin:/snap/bin"
+for d in "$HOME"/.nvm/versions/node/*/bin "$HOME"/.local/share/fnm/node-versions/*/installation/bin; do [ -d "$d" ] && PATH="$PATH:$d"; done
+export PATH
 m() { printf '@@agentd-app %s\n' "$*"; }
 if command -v timeout >/dev/null 2>&1; then TO=timeout
 elif command -v gtimeout >/dev/null 2>&1; then TO=gtimeout

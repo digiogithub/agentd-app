@@ -29,6 +29,7 @@ const agentChoices = [
   AgentChoice('pando', 'Pando'),
   AgentChoice('opencode', 'opencode'),
   AgentChoice('gemini', 'Gemini CLI'),
+  AgentChoice('grok', 'Grok'),
 ];
 
 const _targetHints = {
