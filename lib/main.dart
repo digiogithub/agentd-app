@@ -1,5 +1,6 @@
 import 'dart:io' show Platform;
 
+import 'package:app_links/app_links.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -36,6 +37,8 @@ Widget buildApp({AppData? data, SettingsStore? settingsStore, AppSettings? setti
       provisionServiceProvider.overrideWithValue(data.provision),
       hostKeyPromptsProvider.overrideWithValue(data.hostKeyPrompts),
       if (Platform.isAndroid) backgroundBridgeProvider.overrideWithValue(MethodChannelBackgroundBridge()),
+      // agentd://relay?... invite links opened from another app.
+      if (Platform.isAndroid || Platform.isIOS) appLinksProvider.overrideWithValue(AppLinks().uriLinkStream),
     ],
     child: const AgentdApp(),
   );

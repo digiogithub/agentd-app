@@ -113,14 +113,21 @@ class _MailPoller {
         _emit(const [], const []);
         return;
       }
-      final listing = await c.queue();
-      final queues = [for (final q in listing.queues) toWorkQueue(q)];
+      // Work queues are not exposed over the relay (forbidden): none.
+      final queueList = await _unlessForbidden(() async => (await c.queue()).queues) ?? const [];
+      final queues = [for (final q in queueList) toWorkQueue(q)];
       if (_inbox.isEmpty) {
         _emit(null, queues);
         return;
       }
       final byId = <int, AgentdMessage>{};
-      for (final m in await _mailbox(c, null)) {
+      // A guest device has no mailbox at all.
+      final own = await _unlessForbidden(() => _mailbox(c, null));
+      if (own == null) {
+        _emit(const [], queues);
+        return;
+      }
+      for (final m in own) {
         byId[m.id] = m;
       }
       // Mail between agents: peek at every session's mailbox.
@@ -131,11 +138,11 @@ class _MailPoller {
             byId[m.id] = m;
           }
         } on AgentdError {
-          // Removed meanwhile.
+          // Removed meanwhile, or not visible to this relay device.
         }
       }
       _mailboxes.removeWhere((k, _) => k.isNotEmpty && !sessions.any((s) => s.name == k));
-      for (final q in listing.queues) {
+      for (final q in queueList) {
         final prev = _queueItems[q.name];
         final r = await c.queue(name: q.name, bodies: true, sinceDigest: prev?.$1);
         final items = r.notModified && prev != null ? prev.$2 : r.items;
@@ -144,7 +151,7 @@ class _MailPoller {
           byId[m.id] = m;
         }
       }
-      _queueItems.removeWhere((k, _) => !listing.queues.any((q) => q.name == k));
+      _queueItems.removeWhere((k, _) => !queueList.any((q) => q.name == k));
       final mail = [for (final m in byId.values) toMailMessage(m)]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
       _emit(mail, queues);
     } catch (e) {
@@ -156,6 +163,16 @@ class _MailPoller {
       }
     } finally {
       _running = false;
+    }
+  }
+
+  /// [f], or null when the daemon refuses it as forbidden (relay devices).
+  static Future<T?> _unlessForbidden<T>(Future<T> Function() f) async {
+    try {
+      return await f();
+    } on AgentdError catch (e) {
+      if (e.isForbidden) return null;
+      rethrow;
     }
   }
 

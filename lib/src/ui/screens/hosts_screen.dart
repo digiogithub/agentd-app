@@ -74,7 +74,12 @@ class HostCard extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('¿Quitar ${host.config.name}?', style: AppFonts.inter(size: 18, weight: FontWeight.w600)),
-        content: Text('Se borra de la app; el host no se toca.', style: AppText.body),
+        content: Text(
+          host.config.isRelay
+              ? 'Se borra de la app junto con la clave de este dispositivo. En el host sigue emparejado hasta que lo revoques con agentd relay devices revoke.'
+              : 'Se borra de la app; el host no se toca.',
+          style: AppText.body,
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
           TextButton(
@@ -92,18 +97,20 @@ class HostCard extends ConsumerWidget {
     final c = host.config;
     final caps = host.capabilities;
     final online = host.state == HostState.online;
-    final address = '${c.user}@${c.host}${c.port != 22 ? ':${c.port}' : ''} · SSH';
+    final relay = c.relay;
+    final address = c.isRelay ? 'relay · ${c.host}' : '${c.user}@${c.host}${c.port != 22 ? ':${c.port}' : ''} · SSH';
 
     if (!online) {
       final (sub, color) = switch (host.state) {
         HostState.connecting => ('Conectando…', AppColors.muted),
         HostState.error => (host.error ?? 'Error de conexión', AppColors.danger),
-        _ => ('Sin conexión', AppColors.muted),
+        _ => (host.error ?? 'Sin conexión', AppColors.muted),
       };
+      final offlineSub = c.isRelay ? '$sub · relay' : sub;
       return GestureDetector(
         onLongPress: () => _remove(context, ref),
         child: AppCard(
-          semanticLabel: '${c.name}, $sub',
+          semanticLabel: '${c.name}, $offlineSub',
           child: Row(
             children: [
               Semantics(
@@ -128,7 +135,7 @@ class HostCard extends ConsumerWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      sub,
+                      offlineSub,
                       style: AppFonts.inter(size: 12, color: color),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -163,7 +170,12 @@ class HostCard extends ConsumerWidget {
     final clis = agentClis.where((t) => caps?.has(t) ?? false).toList();
 
     final tags = <Widget>[
-      if (hasAgentd) TagChip('agentd ${caps!.tools['agentd']?.version ?? ''}'.trim(), bg: AppColors.accentBg, fg: AppColors.accentLight),
+      if (relay != null) ...[
+        TagChip('relay', bg: AppColors.accentBg, fg: AppColors.accentLight),
+        TagChip(_scopeLabel(relay.scope)),
+        if (relay.sessions.isNotEmpty) TagChip('solo ${relay.sessions.join(', ')}'),
+      ] else if (hasAgentd)
+        TagChip('agentd ${caps!.tools['agentd']?.version ?? ''}'.trim(), bg: AppColors.accentBg, fg: AppColors.accentLight),
       if (hasAgentd) ...[
         if (caps!.has('zellij')) const TagChip('zellij'),
         if (caps.has('tmux')) const TagChip('tmux'),
@@ -237,3 +249,10 @@ class HostCard extends ConsumerWidget {
     );
   }
 }
+
+/// Spanish label of a relay device scope.
+String _scopeLabel(RelayScope s) => switch (s) {
+  RelayScope.view => 'solo ver',
+  RelayScope.operate => 'operar',
+  RelayScope.admin => 'admin',
+};

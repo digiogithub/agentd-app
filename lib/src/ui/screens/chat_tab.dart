@@ -215,6 +215,8 @@ class _ChatTabState extends ConsumerState<ChatTab> {
     final view = widget.view;
     final items = view?.items ?? const <ChatItem>[];
     final pending = widget.session.pending;
+    final host = ref.watch(hostConfigProvider(widget.session.hostId));
+    final canOperate = host?.canOperate ?? true;
     final inbox = ref.watch(inboxProvider(widget.session.hostId)).value ?? const <MailMessage>[];
     final queued = inbox.where((m) => m.to == widget.session.name && m.state == MailState.queued).length;
     if (_follow) _pinToEnd();
@@ -229,14 +231,14 @@ class _ChatTabState extends ConsumerState<ChatTab> {
     }
     if (pending != null) {
       if (children.isNotEmpty) children.add(const SizedBox(height: 14));
-      children.add(
-        PendingCard(
-          key: ValueKey('pending-${pending.revision}-${pending.question}'),
-          pending: pending,
-          onAnswer: _choose,
-          onWriteOther: () => widget.composerFocus.requestFocus(),
-        ),
+      final card = PendingCard(
+        key: ValueKey('pending-${pending.revision}-${pending.question}'),
+        pending: pending,
+        onAnswer: _choose,
+        onWriteOther: () => widget.composerFocus.requestFocus(),
       );
+      // A view-only relay device sees the question but cannot answer it.
+      children.add(canOperate ? card : IgnorePointer(child: Opacity(opacity: 0.55, child: card)));
     }
 
     return Column(
@@ -268,6 +270,23 @@ class _ChatTabState extends ConsumerState<ChatTab> {
                   ],
                 ),
         ),
+        if (!canOperate)
+          Container(
+            key: const ValueKey('read-only-note'),
+            width: double.infinity,
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: AppColors.divider)),
+            ),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Row(
+              children: [
+                Icon(Icons.visibility_outlined, size: 16, color: AppColors.muted),
+                const SizedBox(width: 8),
+                Expanded(child: Text('Solo lectura: este dispositivo puede ver, no escribir ni aprobar', style: AppText.caption)),
+              ],
+            ),
+          )
+        else
         Container(
           decoration: BoxDecoration(
             border: Border(top: BorderSide(color: AppColors.divider)),
@@ -331,16 +350,19 @@ class _ChatTabState extends ConsumerState<ChatTab> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  RoundIconButton(
-                    icon: Icons.add,
-                    label: 'Adjuntar imagen',
-                    bg: AppColors.surface,
-                    border: AppColors.border,
-                    fg: AppColors.secondary,
-                    iconSize: 20,
-                    onPressed: _sending ? null : _pickSource,
-                  ),
-                  const SizedBox(width: 8),
+                  // Images are copied over the host's shell: SSH hosts only.
+                  if (host?.hasShell ?? true) ...[
+                    RoundIconButton(
+                      icon: Icons.add,
+                      label: 'Adjuntar imagen',
+                      bg: AppColors.surface,
+                      border: AppColors.border,
+                      fg: AppColors.secondary,
+                      iconSize: 20,
+                      onPressed: _sending ? null : _pickSource,
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                   Expanded(
                     child: TextField(
                       key: const ValueKey('composer'),
@@ -409,6 +431,7 @@ String sendErrorMessage(Object e) {
     AgentdErrorCode.conflict => 'La pantalla del agente cambió: revisa la vista y reintenta',
     AgentdErrorCode.timeout => 'El agente no responde',
     AgentdErrorCode.exited => 'La sesión ha terminado',
+    AgentdErrorCode.forbidden => 'Este dispositivo no tiene permiso para esto en el host',
     AgentdErrorCode.invalid => 'El texto está vacío o es demasiado largo (máx. 64 KiB)',
     _ => 'No se pudo enviar',
   };

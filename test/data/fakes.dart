@@ -170,6 +170,15 @@ class StubHosts implements HostsRepository {
 
   @override
   Future<HostConfig> enrollWithPassword(HostConfig config, String password) async => config;
+
+  @override
+  Future<HostConfig> pairRelay(String link, {required String deviceName, void Function(RelayPairPhase phase)? onPhase}) => throw UnimplementedError();
+
+  /// Daemon connections of relay hosts.
+  Future<ByteChannel> Function(String hostId)? relayDial;
+
+  @override
+  Future<ByteChannel> agentdChannel(String hostId) => relayDial?.call(hostId) ?? (throw StateError('no relay for $hostId'));
 }
 
 HostStatus onlineHost(String id, HostCapabilities caps) => HostStatus(HostConfig(id: id, name: id, host: '$id.local', user: 'u'), state: HostState.online, capabilities: caps);

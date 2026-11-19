@@ -2,7 +2,7 @@
 
 Mobile Flutter client (Android and iOS only) that joins what Moshi, Alma and agentd do:
 one inbox of coding agents across hosts, chat view, terminal, approvals, agent mailbox,
-and host provisioning over SSH. Design (validated mockups):
+and host provisioning over SSH (agentd sessions also through agentd-relay). Design (validated mockups):
 https://claude.ai/artifact/T3omboYBBsufo6zJHQpZdP. Background analysis:
 `/www/MCP/herdr-movil/{moshi-hook,alma-desktop,ideas-agentd}.md`.
 
@@ -12,7 +12,7 @@ https://claude.ai/artifact/T3omboYBBsufo6zJHQpZdP. Background analysis:
   2026-11-15): the desktop app is a separate native Go program built in the agentd repo.
   Do not add desktop platform folders or desktop-only code paths here.
 
-- **SSH is the only transport and the only auth.** No gateway, no tokens, no open ports.
+- **SSH is the main transport.** No gateway, no tokens, no open ports.
   `dartssh2` (pure Dart). Ed25519 key generated on the device, kept in
   `flutter_secure_storage`; host key trust on first use (SHA256 fingerprint shown).
 - **agentd**: the app opens `direct-streamlocal@openssh.com` to the daemon socket
@@ -40,6 +40,7 @@ Cross-layer API: `core/contracts.dart` only.
 |---|---|---|
 | `core/` | P0 | contracts, ids |
 | `transport/` | P1-A | `SshRemoteShell implements RemoteShell`, key store, host key store, connection pool |
+| `relay/` | R | agentd-relay client: Noise IK/IKpsk2 (`noise.dart`), stream mux (`mux.dart`), WebSocket (`msg_conn.dart`), invite + payloads (`wire.dart`), pair/connect/dialer (`client.dart`) |
 | `agentd/` | P1-B | wire codec, `AgentdClient` (ops), event subscription, attach frames, model mapping to contracts |
 | `mux/` | P1-C | zellij and tmux adapters over `RemoteShell` |
 | `provision/` | P1-C | `ProvisionService` implementation, detect script + parser |
@@ -54,6 +55,8 @@ Cross-layer API: `core/contracts.dart` only.
 - [x] P2 integration: `data/` repositories, Riverpod providers, app boots on real repos, fake
   mode flag for demos (`--dart-define=AGENTD_APP_FAKE=true`).
 - [ ] P3 field test against a real host (agentd + zellij), Android and iOS builds.
+- [x] R relay transport (agentd plan phase 5): Dart Noise + mux + WebSocket, pairing by invite
+  link, relay hosts in the inbox, scope-aware UI. See "Relay transport" below.
 
 ## Integration (P2) notes
 
@@ -108,3 +111,50 @@ Spec: `agentd/docs/plans/agentd/workspace-ux_plan.md` (same behaviour on the des
 - **New session**: `Abrir: Agente | Solo terminal` (`OpenKind`); the old `bash` agent tile is gone. Terminal only passes `harness: kShellHarness` to `SessionsRepository.launch`: agentd `run {target, harness: "shell", cmd: ["sh","-c",'exec "${SHELL:-sh}" -l'], profile: "default"}` (profile `shell` if the daemon has one; name `shell@<label>`), zellij/tmux a pane/window with no command (adapters accept an empty command), SSH `cd` + login shell. Project field: alias chips, `+ Carpeta…` (free text) and `Explorar…`.
 - **Folder browser**: `SessionsRepository.listDir(hostId, path, {hidden})` runs one POSIX sh script (`data/list_dir.dart`, path single-quoted, NUL separated output, flag 1/0 for readable+traversable, cap 2000, exit 3 = `No existe`, 4 = `Sin permiso`) over the host shell; the parser is pure Dart. `screens/folder_browser_screen.dart` is a full-screen route (breadcrumb up to `/`, Inicio, Subir, Mostrar ocultas, greyed locked folders, `Usar esta carpeta`). Tests run the script under real `sh` (`test/data/list_dir_test.dart`).
 - **Terminate**: `SessionsRepository.terminate(s)`: agentd `kill KILL`, poll `ls` until exited (5 s), `rm` (exited: only `rm`); zellij `kill-session` + `delete-session --force`; tmux `kill-session`; SSH shell closes its PTY. UI (`ui/terminate.dart`): `Terminar` in the session screen menu and long-press on a list row, confirm dialog, then back to the list.
+
+## Relay transport (agentd-relay)
+
+Protocol v1 and design live in agentd: `docs/plans/agentd/relay_plan.md` (normative) and
+`docs/design/relay-transport.md`; the Go reference is `internal/relaywire` + `internal/relayclient`.
+
+- **Crypto**: package `cryptography` 2.9.0, its synchronous pure-Dart primitives (X25519,
+  ChaCha20-Poly1305, SHA-256; HMAC/HKDF written on top per the Noise spec). `IkHandshake` does
+  both roles (the responder is used by tests); psk placement 2 mixes every `e` into the chaining
+  key. Nonce = 4 zero bytes + 64-bit little-endian counter. `test/relay/noise_vectors_test.dart`
+  reproduces the Go vectors byte for byte (msg1, msg2, one transport message each way, initiator
+  and responder, IK and IKpsk2).
+- **Mux** (`RelayMux`, `RelayStream implements ByteChannel`): odd stream ids from 1, DATA <= 32
+  KiB, 256 KiB window per direction, CREDIT granted once the listener consumed >= 64 KiB (a paused
+  subscription holds credit back), a window overflow by the peer breaks the tunnel. `close()` sends
+  bytes still waiting for credit first, then CLOSE. `AgentdClient` runs on these streams unchanged
+  (ops, subscribe, attach).
+- **WebSocket**: dart:io `WebSocket.connect(<relay>/v1/connect?route=…, protocols:
+  ['agentd-relay.v1'])`, ping every 25 s, binary messages <= 70 KiB. Close codes 4404 host offline,
+  4504 host did not answer, 4429 rate limited, 4503 too many tunnels (`RelayFailure`; Spanish text
+  in `describeRelayError`).
+- **Model**: `HostConfig.transport` (`ssh` | `relay`) + `RelayHostInfo` (relay URL, route, pinned
+  host key, device id, scope, sessions, kind, label; JSON in the same `agentd.hosts.v1` list).
+  `canOperate` / `canAdmin` / `hasShell` drive the UI. Contract additions: `HostsRepository.pairRelay`
+  (+ `RelayPairPhase`) and `agentdChannel`.
+- **Keys**: one X25519 device key per paired host (decision: revoking or removing one host never
+  touches another, and hosts cannot correlate the phone across them), secure store slot
+  `agentd.relay.key.<keyId>`; the invite code is used once and never stored.
+- **Data**: `SshHostsRepository` keeps one `RelayDialer` (tunnel) per relay host; a new tunnel
+  marks the host online with `relayCapabilities` (agentd only, socket `relay`) and refreshes the
+  scope from the Welcome (a downgrade on the host shows up at the next connect); a dropped tunnel
+  marks it offline and reconnects with the usual backoff; `reconnectAll` pings the live tunnel.
+  `shell()` throws `NoShellOverRelay`. `AgentdClients` dials `agentdChannel` for relay hosts. The
+  mail poller treats `forbidden` queue / mailbox ops as empty (queues are never exposed over the
+  relay; guests have no mailbox). Launch over the relay: harness only (no plain terminal), target
+  = alias or absolute path.
+- **UI**: Añadir host has `SSH | Invitación relay` (paste, device name, "Aprueba en el host" while
+  the host waits); `agentd://relay` links open it (app_links; Android intent filter, iOS URL scheme;
+  Flutter's route deep linking is off). Hosts list: `relay` + scope tags, offline reason. Session
+  screen / agents list / new session hide what the scope forbids (`hostConfigProvider`).
+- **Tests**: vectors, mux (window, credit, close, limits, tunnel drop), invite parser, client
+  against an in-memory fake host that follows the protocol (`test/relay/fake_host.dart`), a
+  loopback WebSocket server, the repository (`test/data/relay_hosts_test.dart`), UI
+  (`test/ui/relay_ui_test.dart`). `AGENTD_RELAY_TEST_INVITE` runs a live test against a real relay
+  + daemon (done on 2026-11-19 against the Go `agentd-relay` and daemon from the agentd working
+  tree: pair, ping, run, ls, attach observe, kill, rm all passed).
+- Not done: QR scanning of the invite (paste or open the link).

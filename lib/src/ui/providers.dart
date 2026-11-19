@@ -29,6 +29,10 @@ final provisionServiceProvider = Provider<ProvisionService>((ref) => FakeProvisi
 /// Android); a no-op elsewhere and in tests.
 final backgroundBridgeProvider = Provider<BackgroundBridge>((ref) => NoopBackgroundBridge());
 
+/// Links that opened the app (app_links in main.dart; nothing in tests and
+/// on the fakes). `agentd://relay?...` opens Añadir host with the invite.
+final appLinksProvider = Provider<Stream<Uri>>((ref) => const Stream.empty());
+
 final hostKeyPromptsProvider = Provider<HostKeyPrompts>((ref) => HostKeyPrompts());
 
 /// Saved hosts with their live state.
@@ -45,6 +49,13 @@ final inboxProvider = StreamProvider.family<List<MailMessage>, String>((ref, hos
 final queuesProvider = StreamProvider.family<List<WorkQueue>, String>((ref, hostId) => ref.watch(mailRepositoryProvider).queues(hostId));
 
 /// Host name by id ('' when unknown), for subtitles.
+/// The saved config of a host (null while unknown). Relay hosts carry their
+/// device scope: the UI hides what it forbids ([HostConfig.canOperate],
+/// [HostConfig.canAdmin], [HostConfig.hasShell]).
+final hostConfigProvider = Provider.family<HostConfig?, String>(
+  (ref, hostId) => (ref.watch(hostsProvider).value ?? const <HostStatus>[]).where((h) => h.config.id == hostId).firstOrNull?.config,
+);
+
 final hostNamesProvider = Provider<Map<String, String>>((ref) {
   final hosts = ref.watch(hostsProvider).value ?? const [];
   return {for (final h in hosts) h.config.id: h.config.name};

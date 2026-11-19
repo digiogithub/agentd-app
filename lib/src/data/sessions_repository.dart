@@ -509,9 +509,16 @@ class LiveSessionsRepository implements SessionsRepository {
         if (c == null) throw StateError('host $hostId has no reachable agentd');
         final aliases = await _aliasDirs(hostId);
         final p = project.trim();
-        final target = aliases.containsKey(p) ? p : await _absDir(hostId, await _dir(hostId, p));
         final AgentdSessionInfo info;
-        if (_isShell(harness)) {
+        if (h?.config.isRelay ?? false) {
+          // Over the relay the daemon starts harnesses from its profiles
+          // only (no cmd, so no plain terminal) and there is no shell to
+          // expand `~`: an alias or an absolute directory.
+          if (_isShell(harness)) throw UnsupportedError('a relay host cannot open a plain terminal');
+          if (!aliases.containsKey(p) && !p.startsWith('/')) throw ArgumentError.value(project, 'project', 'relay hosts need an alias or an absolute path');
+          info = await c.run(target: p, harness: harness);
+        } else if (_isShell(harness)) {
+          final target = aliases.containsKey(p) ? p : await _absDir(hostId, await _dir(hostId, p));
           // A login shell: the `shell` harness with an explicit command; its
           // profile is `default` unless the daemon has one called `shell`.
           var profile = 'default';
@@ -533,6 +540,7 @@ class LiveSessionsRepository implements SessionsRepository {
           }
           info = got;
         } else {
+          final target = aliases.containsKey(p) ? p : await _absDir(hostId, await _dir(hostId, p));
           info = await c.run(target: target, harness: harness, cwd: await _home(hostId));
         }
         final s = toAgentSession(info, hostId: hostId);

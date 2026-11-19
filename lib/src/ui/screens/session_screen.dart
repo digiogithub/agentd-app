@@ -90,8 +90,13 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
     final s = _session;
     final host = ref.watch(hostNamesProvider)[s.hostId] ?? '';
     final repo = ref.read(sessionsRepositoryProvider);
+    // Relay hosts: what the device's scope allows (SSH hosts allow all).
+    final cfg = ref.watch(hostConfigProvider(s.hostId));
+    final canOperate = cfg?.canOperate ?? true;
+    final canAdmin = cfg?.canAdmin ?? true;
+    final observe = _observe || !canOperate;
     final subtitle = _tab == SessionTab.terminal
-        ? [if (host.isNotEmpty) host, ?_size, if (_observe) 'observando'].join(' · ')
+        ? [if (host.isNotEmpty) host, ?_size, if (observe) 'observando'].join(' · ')
         : [if (host.isNotEmpty) host, ?s.cwd, if (s.turn != null) 'turno ${s.turn}'].join(' · ');
 
     return Scaffold(
@@ -130,16 +135,18 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                       StatusPill.status(s.status),
                       const SizedBox(width: 8),
                       if (_tab == SessionTab.terminal) ...[
-                        _ModeToggle(observe: _observe, onTap: () => setState(() => _observe = !_observe)),
-                        const SizedBox(width: 4),
-                        _MoreMenu(onTerminate: () => _terminate(s)),
+                        if (canOperate) ...[
+                          _ModeToggle(observe: _observe, onTap: () => setState(() => _observe = !_observe)),
+                          const SizedBox(width: 4),
+                        ],
+                        _MoreMenu(onTerminate: canAdmin ? () => _terminate(s) : null),
                       ] else
                         _MoreMenu(
-                          onInterrupt: _hasChat ? () => _run(() => repo.interrupt(s), 'No se pudo interrumpir') : null,
-                          onMailbox: _hasChat
+                          onInterrupt: _hasChat && canOperate ? () => _run(() => repo.interrupt(s), 'No se pudo interrumpir') : null,
+                          onMailbox: _hasChat && canOperate
                               ? () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => MailboxScreen(hostId: s.hostId, pushed: true)))
                               : null,
-                          onTerminate: () => _terminate(s),
+                          onTerminate: canAdmin ? () => _terminate(s) : null,
                         ),
                     ],
                   ),
@@ -176,7 +183,7 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                   _terminalOpened
                       ? TerminalTab(
                           session: s,
-                          observe: _observe,
+                          observe: observe,
                           onSize: (c, r) {
                             final v = '$c×$r';
                             if (v != _size) WidgetsBinding.instance.addPostFrameCallback((_) => mounted ? setState(() => _size = v) : null);
@@ -229,10 +236,10 @@ class _ModeToggle extends StatelessWidget {
 }
 
 class _MoreMenu extends StatelessWidget {
-  const _MoreMenu({this.onInterrupt, this.onMailbox, required this.onTerminate});
+  const _MoreMenu({this.onInterrupt, this.onMailbox, this.onTerminate});
   final VoidCallback? onInterrupt;
   final VoidCallback? onMailbox;
-  final VoidCallback onTerminate;
+  final VoidCallback? onTerminate;
 
   @override
   Widget build(BuildContext context) => RoundIconButton(
@@ -272,15 +279,16 @@ class _MoreMenu extends StatelessWidget {
                 showChatFontSheet(context);
               },
             ),
-            ListTile(
-              leading: Icon(Icons.delete_forever_outlined, color: AppColors.danger),
-              title: Text('Terminar', style: AppFonts.inter(size: 15, color: AppColors.danger)),
-              subtitle: Text('Forzar cierre y borrar la sesión', style: AppText.caption),
-              onTap: () {
-                Navigator.pop(ctx);
-                onTerminate();
-              },
-            ),
+            if (onTerminate != null)
+              ListTile(
+                leading: Icon(Icons.delete_forever_outlined, color: AppColors.danger),
+                title: Text('Terminar', style: AppFonts.inter(size: 15, color: AppColors.danger)),
+                subtitle: Text('Forzar cierre y borrar la sesión', style: AppText.caption),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  onTerminate!();
+                },
+              ),
           ],
         ),
       ),

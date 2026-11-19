@@ -34,6 +34,15 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- agentd-relay invite links (agentd relay invite): handled by
+                 app_links, so Flutter's own route deep linking is off. -->
+            <meta-data android:name="flutter_deeplinking_enabled" android:value="false" />
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="agentd" android:host="relay" />
+            </intent-filter>
         </activity>
         <!-- Keeps the SSH connections to the user's hosts open while the app is
              in the background (ConnectionService). specialUse: no other type

@@ -74,9 +74,11 @@ class FakeHostsRepository implements HostsRepository {
     final i = _hosts.indexWhere((h) => h.config.id == hostId);
     if (i < 0) return;
     final h = _hosts[i];
-    _hosts[i] = HostStatus(h.config, state: HostState.online, capabilities: h.capabilities ?? sampleHosts[2].capabilities, sessionCount: h.sessionCount);
+    _hosts[i] = HostStatus(h.config, state: HostState.online, capabilities: h.capabilities ?? (h.config.isRelay ? _relayCaps : sampleHosts[2].capabilities), sessionCount: h.sessionCount);
     _changes.add(null);
   }
+
+  static const _relayCaps = HostCapabilities(agentdSocket: 'relay', tools: {'agentd': ToolInfo('agentd', installed: true)});
 
   /// Hosts closed with [disconnect], in order.
   final List<String> disconnected = [];
@@ -123,6 +125,48 @@ class FakeHostsRepository implements HostsRepository {
     final caps = _hosts.where((h) => h.config.id == hostId).map((h) => h.capabilities).firstOrNull;
     return shells[hostId] ??= FakeRemoteShell(hostId, caps: caps ?? const HostCapabilities());
   }
+
+  /// Relay links paired with [pairRelay] (the code is not kept: only the
+  /// count matters to tests).
+  int relayPairings = 0;
+
+  /// When set, [pairRelay] waits for it before succeeding (shows the
+  /// "approve on the host" state).
+  Completer<void>? pairApproval;
+
+  /// When set, [pairRelay] throws it.
+  Object? pairError;
+
+  /// Scope given to hosts paired with [pairRelay].
+  RelayScope pairScope = RelayScope.operate;
+
+  @override
+  Future<HostConfig> pairRelay(String link, {required String deviceName, void Function(RelayPairPhase phase)? onPhase}) async {
+    final u = Uri.tryParse(link.trim());
+    if (u == null || u.scheme != 'agentd' || u.host != 'relay') throw const FormatException('not an agentd relay link');
+    onPhase?.call(RelayPairPhase.connecting);
+    final err = pairError;
+    if (err != null) throw err;
+    onPhase?.call(RelayPairPhase.waitingApproval);
+    await pairApproval?.future;
+    relayPairings++;
+    final label = u.queryParameters['h'] ?? 'relay';
+    final config = HostConfig(
+      id: 'relay-$label',
+      name: label,
+      host: Uri.tryParse(u.queryParameters['u'] ?? '')?.host ?? 'relay',
+      port: 0,
+      user: '',
+      transport: HostTransport.relay,
+      relay: RelayHostInfo(relayUrl: u.queryParameters['u'] ?? '', route: u.queryParameters['r'] ?? '', hostKey: u.queryParameters['k'] ?? '', deviceId: 'dfake', scope: pairScope, kind: 'owner', label: label),
+    );
+    await save(config);
+    await connect(config.id);
+    return config;
+  }
+
+  @override
+  Future<ByteChannel> agentdChannel(String hostId) async => throw UnsupportedError('the fake has no daemon');
 
   @override
   Future<HostConfig> enrollWithPassword(HostConfig config, String password) async {

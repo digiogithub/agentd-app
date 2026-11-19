@@ -48,6 +48,8 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
   }
 
   Future<void> _sessionMenu(AgentSession s) async {
+    // Terminar is the only action: relay devices below admin have none.
+    if (!(ref.read(hostConfigProvider(s.hostId))?.canAdmin ?? true)) return;
     final terminate = await showModalBottomSheet<bool>(
       context: context,
       builder: (ctx) => SafeArea(
@@ -125,7 +127,14 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
     } else {
       final shown = visible.where((s) => show(groupOf(s)));
       for (final g in groupByProject(shown)) {
-        children.add(_ProjectHeader(group: g, hostName: hosts.length > 1 ? (names[g.hostId] ?? '') : '', onAdd: () => _newSession(hostId: g.hostId, project: g.hasProject ? g.path : null)));
+        final canStart = ref.watch(hostConfigProvider(g.hostId))?.canAdmin ?? true;
+        children.add(
+          _ProjectHeader(
+            group: g,
+            hostName: hosts.length > 1 ? (names[g.hostId] ?? '') : '',
+            onAdd: canStart ? () => _newSession(hostId: g.hostId, project: g.hasProject ? g.path : null) : null,
+          ),
+        );
         for (final s in g.sessions) {
           children.add(const SizedBox(height: 10));
           children.add(_card(s, names[s.hostId] ?? ''));
@@ -212,7 +221,8 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
 
   Widget _cardBody(AgentSession s, String hostName) {
     final p = s.pending;
-    if (p != null && isPermission(p)) {
+    final canOperate = ref.watch(hostConfigProvider(s.hostId))?.canOperate ?? true;
+    if (p != null && isPermission(p) && canOperate) {
       return ApprovalCard(
         key: ValueKey('approval-${s.key}'),
         session: s,
@@ -243,10 +253,12 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
 
 /// Header of a project group: directory, host, count, attention and `+`.
 class _ProjectHeader extends StatelessWidget {
-  const _ProjectHeader({required this.group, required this.hostName, required this.onAdd});
+  const _ProjectHeader({required this.group, required this.hostName, this.onAdd});
   final ProjectGroup group;
   final String hostName;
-  final VoidCallback onAdd;
+
+  /// Null when the host does not let this device start sessions.
+  final VoidCallback? onAdd;
 
   @override
   Widget build(BuildContext context) {
@@ -284,14 +296,15 @@ class _ProjectHeader extends StatelessWidget {
             ),
             const SizedBox(width: 4),
           ],
-          RoundIconButton(
-            icon: Icons.add,
-            label: group.hasProject ? 'Nueva sesión en ${group.label}' : 'Nueva sesión',
-            bg: AppColors.surface,
-            border: AppColors.border,
-            iconSize: 18,
-            onPressed: onAdd,
-          ),
+          if (onAdd != null)
+            RoundIconButton(
+              icon: Icons.add,
+              label: group.hasProject ? 'Nueva sesión en ${group.label}' : 'Nueva sesión',
+              bg: AppColors.surface,
+              border: AppColors.border,
+              iconSize: 18,
+              onPressed: onAdd,
+            ),
         ],
       ),
     );

@@ -2,6 +2,7 @@
 // types; implementations live in their own folders:
 //
 //   lib/src/transport/  SSH (RemoteShell, HostKeyStore, KeyStore)
+//   lib/src/relay/      agentd-relay tunnel (Noise + stream mux over WebSocket)
 //   lib/src/agentd/     agentd wire protocol over a ByteChannel
 //   lib/src/mux/        zellij / tmux over a RemoteShell
 //   lib/src/provision/  host detection and installs over a RemoteShell
@@ -66,6 +67,94 @@ abstract class RemoteShell {
 
 enum AuthKind { generatedKey, importedKey, password }
 
+/// How the app reaches a host: SSH (shell, multiplexers, provisioning and
+/// the agentd socket) or an agentd-relay tunnel (agentd sessions only).
+enum HostTransport { ssh, relay }
+
+/// Permission scope of a relay device, lowest first (agentd design
+/// relay-transport §5). The daemon enforces it; the UI hides what it forbids.
+enum RelayScope {
+  /// Watch sessions, chat views and terminals (observe only).
+  view,
+
+  /// Also prompt, answer approvals, type in terminals, mailbox.
+  operate,
+
+  /// Also start, kill and remove sessions.
+  admin;
+
+  static RelayScope parse(String? s) => RelayScope.values.where((v) => v.name == s).firstOrNull ?? RelayScope.view;
+}
+
+/// A host paired through agentd-relay. No secret here: the device's X25519
+/// private key is in the secure store under [HostConfig.keyId].
+class RelayHostInfo {
+  const RelayHostInfo({
+    required this.relayUrl,
+    required this.route,
+    required this.hostKey,
+    required this.deviceId,
+    this.scope = RelayScope.view,
+    this.sessions = const [],
+    this.kind = '',
+    this.label = '',
+  });
+
+  /// Base URL of the relay (https/wss; http/ws only on loopback).
+  final String relayUrl;
+  final String route;
+
+  /// Pinned host X25519 public key, base64url (from the invite).
+  final String hostKey;
+  final String deviceId;
+  final RelayScope scope;
+
+  /// Session name globs this device may see (empty = all).
+  final List<String> sessions;
+
+  /// owner | guest.
+  final String kind;
+
+  /// Host label reported by the host.
+  final String label;
+
+  RelayHostInfo copyWith({RelayScope? scope, List<String>? sessions, String? kind, String? label}) => RelayHostInfo(
+    relayUrl: relayUrl,
+    route: route,
+    hostKey: hostKey,
+    deviceId: deviceId,
+    scope: scope ?? this.scope,
+    sessions: sessions ?? this.sessions,
+    kind: kind ?? this.kind,
+    label: label ?? this.label,
+  );
+
+  Map<String, Object?> toJson() => {
+    'relayUrl': relayUrl,
+    'route': route,
+    'hostKey': hostKey,
+    'deviceId': deviceId,
+    'scope': scope.name,
+    'sessions': sessions,
+    'kind': kind,
+    'label': label,
+  };
+
+  factory RelayHostInfo.fromJson(Map<String, Object?> j) => RelayHostInfo(
+    relayUrl: j['relayUrl'] as String,
+    route: j['route'] as String,
+    hostKey: j['hostKey'] as String,
+    deviceId: j['deviceId'] as String? ?? '',
+    scope: RelayScope.parse(j['scope'] as String?),
+    sessions: [for (final s in (j['sessions'] as List?) ?? const []) s as String],
+    kind: j['kind'] as String? ?? '',
+    label: j['label'] as String? ?? '',
+  );
+
+  bool sameAs(RelayHostInfo o) =>
+      o.relayUrl == relayUrl && o.route == route && o.hostKey == hostKey && o.deviceId == deviceId && o.scope == scope && o.kind == kind && o.label == label && o.sessions.join('\n') == sessions.join('\n');
+}
+
 /// A saved host. Secrets (private keys, passwords) are never in here: they
 /// are in the secure store under [keyId].
 class HostConfig {
@@ -78,10 +167,14 @@ class HostConfig {
     this.auth = AuthKind.generatedKey,
     this.keyId,
     this.hostKeyFingerprint,
+    this.transport = HostTransport.ssh,
+    this.relay,
   });
 
   final String id;
   final String name;
+
+  /// SSH: address. Relay: the relay's host name (display only).
   final String host;
   final int port;
   final String user;
@@ -91,39 +184,70 @@ class HostConfig {
   /// SHA256 fingerprint accepted on first connect (trust on first use).
   final String? hostKeyFingerprint;
 
-  HostConfig copyWith({String? name, String? host, int? port, String? user, AuthKind? auth, String? keyId, String? hostKeyFingerprint}) =>
-      HostConfig(
-        id: id,
-        name: name ?? this.name,
-        host: host ?? this.host,
-        port: port ?? this.port,
-        user: user ?? this.user,
-        auth: auth ?? this.auth,
-        keyId: keyId ?? this.keyId,
-        hostKeyFingerprint: hostKeyFingerprint ?? this.hostKeyFingerprint,
-      );
+  final HostTransport transport;
+
+  /// Set for [HostTransport.relay].
+  final RelayHostInfo? relay;
+
+  bool get isRelay => transport == HostTransport.relay;
+
+  /// A shell on the host: zellij/tmux, plain shells, folders, uploads,
+  /// provisioning. SSH only.
+  bool get hasShell => !isRelay;
+
+  /// May prompt, answer approvals, type in terminals (relay: operate+).
+  bool get canOperate => !isRelay || (relay?.scope.index ?? 0) >= RelayScope.operate.index;
+
+  /// May start and terminate sessions (relay: admin).
+  bool get canAdmin => !isRelay || relay?.scope == RelayScope.admin;
+
+  HostConfig copyWith({
+    String? name,
+    String? host,
+    int? port,
+    String? user,
+    AuthKind? auth,
+    String? keyId,
+    String? hostKeyFingerprint,
+    RelayHostInfo? relay,
+  }) => HostConfig(
+    id: id,
+    name: name ?? this.name,
+    host: host ?? this.host,
+    port: port ?? this.port,
+    user: user ?? this.user,
+    auth: auth ?? this.auth,
+    keyId: keyId ?? this.keyId,
+    hostKeyFingerprint: hostKeyFingerprint ?? this.hostKeyFingerprint,
+    transport: transport,
+    relay: relay ?? this.relay,
+  );
 
   Map<String, Object?> toJson() => {
-        'id': id,
-        'name': name,
-        'host': host,
-        'port': port,
-        'user': user,
-        'auth': auth.name,
-        'keyId': keyId,
-        'hostKeyFingerprint': hostKeyFingerprint,
-      };
+    'id': id,
+    'name': name,
+    'host': host,
+    'port': port,
+    'user': user,
+    'auth': auth.name,
+    'keyId': keyId,
+    'hostKeyFingerprint': hostKeyFingerprint,
+    if (isRelay) 'transport': transport.name,
+    if (relay != null) 'relay': relay!.toJson(),
+  };
 
   factory HostConfig.fromJson(Map<String, Object?> j) => HostConfig(
-        id: j['id'] as String,
-        name: j['name'] as String,
-        host: j['host'] as String,
-        port: (j['port'] as num?)?.toInt() ?? 22,
-        user: j['user'] as String,
-        auth: AuthKind.values.byName((j['auth'] as String?) ?? 'generatedKey'),
-        keyId: j['keyId'] as String?,
-        hostKeyFingerprint: j['hostKeyFingerprint'] as String?,
-      );
+    id: j['id'] as String,
+    name: j['name'] as String,
+    host: j['host'] as String,
+    port: (j['port'] as num?)?.toInt() ?? 22,
+    user: j['user'] as String,
+    auth: AuthKind.values.byName((j['auth'] as String?) ?? 'generatedKey'),
+    keyId: j['keyId'] as String?,
+    hostKeyFingerprint: j['hostKeyFingerprint'] as String?,
+    transport: HostTransport.values.where((t) => t.name == j['transport']).firstOrNull ?? HostTransport.ssh,
+    relay: j['relay'] is Map ? RelayHostInfo.fromJson((j['relay'] as Map).cast<String, Object?>()) : null,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -343,11 +467,31 @@ abstract class HostsRepository {
   /// Generates (once) the app's ed25519 key and returns its OpenSSH public key line.
   Future<String> publicKey();
 
+  /// Pairs this phone with a host through agentd-relay: [link] is the
+  /// invite (`agentd://relay?...` from `agentd relay invite`), [deviceName]
+  /// is shown on the host. [onPhase] reports progress (the host may wait for
+  /// a human approval). Saves the host and returns its config. The invite
+  /// code is never stored. Throws on a bad link, a refusal or a denial.
+  Future<HostConfig> pairRelay(String link, {required String deviceName, void Function(RelayPairPhase phase)? onPhase});
+
+  /// A new connection to the agentd daemon of a relay host (one stream of
+  /// its tunnel, opened first when needed).
+  Future<ByteChannel> agentdChannel(String hostId);
+
   /// Password bootstrap: connects once with [password], installs the app's
   /// public key in `~/.ssh/authorized_keys` (idempotent) and saves [config]
   /// as [AuthKind.generatedKey]. The password is never stored. Returns the
   /// saved config.
   Future<HostConfig> enrollWithPassword(HostConfig config, String password);
+}
+
+/// Progress of [HostsRepository.pairRelay].
+enum RelayPairPhase {
+  /// Reaching the relay and running the handshake.
+  connecting,
+
+  /// The host accepted the invite and waits for its user to approve.
+  waitingApproval,
 }
 
 /// A host key seen for the first time, waiting for the user's decision

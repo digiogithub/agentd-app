@@ -1,5 +1,5 @@
 // One AgentdClient per host, dialing the daemon socket over the host's SSH
-// connection (direct-streamlocal).
+// connection (direct-streamlocal), or a stream of its agentd-relay tunnel.
 
 import 'dart:async';
 
@@ -69,7 +69,7 @@ class AgentdClients {
     if (socket == null) return null;
     final cached = _clients[id];
     if (cached != null && cached.$1 == socket) return cached.$2;
-    final c = AgentdClient(_dial(id, socket));
+    final c = AgentdClient(status.config.isRelay ? () => _hosts.agentdChannel(id) : _dial(id, socket));
     _clients[id] = (socket, c);
     return c;
   }

@@ -9,6 +9,7 @@ import 'package:material_ui/material_ui.dart';
 import '../core/contracts.dart';
 import 'background_controller.dart';
 import 'providers.dart';
+import 'screens/add_host_screen.dart';
 import 'screens/session_screen.dart';
 import 'screens/agents_screen.dart';
 import 'screens/hosts_screen.dart';
@@ -38,6 +39,7 @@ class _AgentdAppState extends ConsumerState<AgentdApp>
 
   late final BackgroundController _background;
   StreamSubscription<String>? _opens;
+  StreamSubscription<Uri>? _links;
   final _navigator = GlobalKey<NavigatorState>();
 
   @override
@@ -51,6 +53,7 @@ class _AgentdAppState extends ConsumerState<AgentdApp>
       settings: () => ref.read(settingsProvider),
     )..start();
     _opens = _background.opens.listen(_openSession);
+    _links = ref.read(appLinksProvider).listen(_openLink, onError: (Object _) {});
     // First frame: nothing is built yet, so no repaint walk is needed.
     AppColors.palette = AppPalette.resolve(
       ref.read(settingsProvider).theme,
@@ -62,6 +65,7 @@ class _AgentdAppState extends ConsumerState<AgentdApp>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _opens?.cancel();
+    _links?.cancel();
     unawaited(_background.dispose());
     super.dispose();
   }
@@ -84,6 +88,24 @@ class _AgentdAppState extends ConsumerState<AgentdApp>
     final nav = _navigator.currentState;
     if (s == null || nav == null) return;
     nav.push(MaterialPageRoute<void>(builder: (_) => SessionScreen(session: s)));
+  }
+
+  /// An `agentd://relay?...` invite opened from another app (or the camera):
+  /// Añadir host with the link filled in. The link is never logged.
+  void _openLink(Uri uri) {
+    if (uri.scheme != 'agentd' || uri.host != 'relay') return;
+    void push() {
+      final nav = _navigator.currentState;
+      if (nav == null) return;
+      nav.push(MaterialPageRoute<void>(builder: (_) => AddHostScreen(relayLink: uri.toString())));
+    }
+
+    // A cold start delivers the link before the navigator exists.
+    if (_navigator.currentState == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => push());
+    } else {
+      push();
+    }
   }
 
   @override

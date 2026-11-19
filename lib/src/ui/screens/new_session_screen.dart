@@ -91,6 +91,8 @@ class _NewSessionScreenState extends ConsumerState<NewSessionScreen> {
 
   bool _targetAvailable(HostStatus? h, LaunchTarget t) {
     final caps = h?.capabilities;
+    // A relay host reaches agentd only (no shell, no multiplexers).
+    if (h != null && h.config.isRelay) return t == LaunchTarget.agentd && caps != null;
     if (caps == null) return t == LaunchTarget.shell;
     return switch (t) {
       LaunchTarget.agentd => caps.has('agentd'),
@@ -100,7 +102,10 @@ class _NewSessionScreenState extends ConsumerState<NewSessionScreen> {
     };
   }
 
-  bool get _terminal => _kind == OpenKind.terminal;
+  bool get _terminal => _kind == OpenKind.terminal && !_relay;
+
+  /// The chosen host is a relay host (set in build).
+  bool _relay = false;
 
   String _name(String project, LaunchTarget target) {
     final what = _terminal ? kShellHarness : _agent;
@@ -177,6 +182,9 @@ class _NewSessionScreenState extends ConsumerState<NewSessionScreen> {
           );
       if (!mounted) return;
       Navigator.of(context).pushReplacement(MaterialPageRoute<void>(builder: (_) => SessionScreen(session: s)));
+    } on ArgumentError {
+      // Relay hosts: no shell to resolve `~` or relative folders.
+      if (mounted) showToast(context, 'Por relay elige un alias o una ruta absoluta (/…)');
     } catch (_) {
       if (mounted) showToast(context, 'No se pudo lanzar la sesión');
     } finally {
@@ -186,9 +194,11 @@ class _NewSessionScreenState extends ConsumerState<NewSessionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final hosts = ref.watch(hostsProvider).value ?? const <HostStatus>[];
+    // Relay devices start sessions only with the admin scope.
+    final hosts = (ref.watch(hostsProvider).value ?? const <HostStatus>[]).where((h) => h.config.canAdmin).toList();
     final sessions = ref.watch(sessionsProvider).value ?? const <AgentSession>[];
     final host = _host(hosts);
+    _relay = host?.config.isRelay ?? false;
     final caps = host?.capabilities;
     final target = _targetAvailable(host, _target) ? _target : LaunchTarget.values.firstWhere((t) => _targetAvailable(host, t));
 
@@ -204,7 +214,9 @@ class _NewSessionScreenState extends ConsumerState<NewSessionScreen> {
     }
     projects.addAll(_extraProjects.where((p) => !projects.contains(p)));
     final project = _project ?? projects.firstOrNull;
-    final installed = _terminal || (caps?.has(_agent) ?? false);
+    // Over the relay the agent CLIs are not detected: the daemon resolves
+    // the harness from its profiles.
+    final installed = _terminal || _relay || (caps?.has(_agent) ?? false);
 
     return Scaffold(
       body: SafeArea(
@@ -258,7 +270,8 @@ class _NewSessionScreenState extends ConsumerState<NewSessionScreen> {
                   SegmentedControl<OpenKind>(
                     radio: true,
                     options: const [(OpenKind.agent, 'Agente'), (OpenKind.terminal, 'Solo terminal')],
-                    value: _kind,
+                    value: _terminal ? OpenKind.terminal : OpenKind.agent,
+                    enabled: (k) => k == OpenKind.agent || !_relay,
                     onChanged: (k) => setState(() => _kind = k),
                   ),
                   const SizedBox(height: 18),
@@ -282,7 +295,7 @@ class _NewSessionScreenState extends ConsumerState<NewSessionScreen> {
                     children: [
                       for (final p in projects)
                         FilterPill(label: shortPath(p), selected: p == project, mono: true, height: 38, radius: 10, onTap: () => setState(() => _project = p)),
-                      if (host != null) _outlinePill('Explorar…', () => _browse(host), 'Explorar carpetas del host'),
+                      if (host != null && host.config.hasShell) _outlinePill('Explorar…', () => _browse(host), 'Explorar carpetas del host'),
                       Semantics(
                         container: true,
                         button: true,
@@ -406,8 +419,8 @@ class _NewSessionScreenState extends ConsumerState<NewSessionScreen> {
 
   Widget _agentTile(AgentChoice a, HostCapabilities? caps, HostStatus? host) {
     final tool = caps?.tools[a.id];
-    final missing = !(tool?.installed ?? false);
-    final sub = (missing ? 'Instalar…' : 'instalado${tool?.version != null ? ' · ${tool!.version}' : ''}');
+    final missing = !(tool?.installed ?? false) && !(host?.config.isRelay ?? false);
+    final sub = (host?.config.isRelay ?? false) ? 'perfil del host' : (missing ? 'Instalar…' : 'instalado${tool?.version != null ? ' · ${tool!.version}' : ''}');
     return SelectTile(
       selected: _agent == a.id,
       radio: true,
@@ -447,6 +460,7 @@ class _NewSessionScreenState extends ConsumerState<NewSessionScreen> {
 String _hostSub(HostStatus h) {
   final v = h.capabilities?.tools['agentd'];
   if (h.state != HostState.online) return 'Sin conexión';
+  if (h.config.isRelay) return 'agentd · relay';
   return (v?.installed ?? false) ? 'agentd ${v!.version ?? ''} · SSH'.replaceAll('  ', ' ') : 'SSH · sin agentd';
 }
 

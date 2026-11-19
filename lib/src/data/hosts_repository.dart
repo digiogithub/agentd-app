@@ -1,12 +1,15 @@
-// HostsRepository over SSH: saved hosts, one pooled connection per host,
-// trust on first use, detection after connect, password bootstrap.
+// HostsRepository: saved hosts, one pooled SSH connection per SSH host
+// (trust on first use, detection after connect, password bootstrap) and one
+// agentd-relay tunnel per relay host (pairing by invite link).
 
 import 'dart:async';
-import 'dart:io' show SocketException;
+import 'dart:io' show Platform, SocketException;
 
 import 'package:dartssh2/dartssh2.dart' show SSHAuthError, SSHHandshakeError, SSHSocketError;
 
+import '../agentd/agentd.dart' show AgentdClient;
 import '../core/contracts.dart';
+import '../relay/relay.dart';
 import '../transport/transport.dart';
 import 'authorized_keys.dart';
 import 'host_store.dart';
@@ -34,7 +37,11 @@ class SshHostsRepository implements HostsRepository {
     required HostConnect connect,
     this.autoConnect = true,
     this.reconnectBackoff = const [Duration(seconds: 2), Duration(seconds: 5), Duration(seconds: 15), Duration(seconds: 60)],
-  }) : _connectFn = connect {
+    RelayClient? relay,
+    String? relayPlatform,
+  }) : _connectFn = connect,
+       _relay = relay ?? RelayClient(),
+       relayPlatform = relayPlatform ?? (Platform.isIOS ? 'ios' : 'android') {
     _pool = ConnectionPool((c) => _connectFn(c));
   }
 
@@ -63,6 +70,13 @@ class SshHostsRepository implements HostsRepository {
   final ProvisionService _provision;
   final HostConnect _connectFn;
   late final ConnectionPool _pool;
+  final RelayClient _relay;
+
+  /// Sent to relay hosts in the hello (`android` | `ios`).
+  final String relayPlatform;
+
+  /// One tunnel (dialer) per relay host.
+  final Map<String, RelayDialer> _dialers = {};
 
   /// Connect every saved host when the list is first watched, and reconnect
   /// after a lost connection.
@@ -148,9 +162,11 @@ class SshHostsRepository implements HostsRepository {
     await _load();
     _retry.remove(hostId)?.cancel();
     _order.remove(hostId);
-    _hosts.remove(hostId);
+    final removed = _hosts.remove(hostId);
     await _pool.drop(hostId);
+    await _dialers.remove(hostId)?.close();
     await _hostKeys.remove(hostId);
+    if (removed != null && removed.config.isRelay) await _keys.deleteSecret(relayKeySlot(removed.config.keyId ?? hostId));
     await _persist();
     _notify();
   }
@@ -175,6 +191,16 @@ class SshHostsRepository implements HostsRepository {
     if (h == null) throw ArgumentError.value(hostId, 'hostId', 'unknown host');
     _retry.remove(hostId)?.cancel();
     _set(hostId, (h) => HostStatus(h.config, state: HostState.connecting, capabilities: h.capabilities, sessionCount: h.sessionCount));
+    if (h.config.isRelay) {
+      try {
+        await _relayTunnel(hostId);
+      } catch (e) {
+        _set(hostId, (h) => HostStatus(h.config, state: HostState.error, capabilities: h.capabilities, error: describeConnectError(e)));
+        rethrow;
+      }
+      _attempts.remove(hostId);
+      return;
+    }
     final RemoteShell shell;
     try {
       shell = await _pool.get(h.config);
@@ -225,7 +251,7 @@ class SshHostsRepository implements HostsRepository {
     _retry[hostId]?.cancel();
     _retry[hostId] = Timer(d, () {
       _retry.remove(hostId);
-      if (_disposed || _pool.current(hostId) != null) return;
+      if (_disposed || _pool.current(hostId) != null || _dialers[hostId]?.current != null) return;
       _connect(hostId, detect: false).catchError((Object _) => _scheduleReconnect(hostId));
     });
   }
@@ -238,6 +264,7 @@ class SshHostsRepository implements HostsRepository {
     _retry.remove(hostId)?.cancel();
     _attempts.remove(hostId);
     await _pool.drop(hostId);
+    await _dialers[hostId]?.close();
     _set(hostId, (h) => HostStatus(h.config, state: HostState.offline, capabilities: h.capabilities));
   }
 
@@ -254,6 +281,11 @@ class SshHostsRepository implements HostsRepository {
     for (final id in [..._order]) {
       _off.remove(id);
       if (_connecting.containsKey(id)) continue;
+      final tunnel = _dialers[id]?.current;
+      if (tunnel != null) {
+        work.add(_probeRelay(id, tunnel));
+        continue;
+      }
       final open = _pool.current(id);
       if (open != null) {
         work.add(_probe(id, open));
@@ -288,6 +320,7 @@ class SshHostsRepository implements HostsRepository {
     if (open != null) return open;
     final h = _hosts[hostId];
     if (h == null) throw ArgumentError.value(hostId, 'hostId', 'unknown host');
+    if (h.config.isRelay) throw const NoShellOverRelay();
     final pending = _connecting[hostId];
     if (pending != null) {
       await pending;
@@ -301,6 +334,137 @@ class SshHostsRepository implements HostsRepository {
       }
     }
     return _pool.get(_hosts[hostId]!.config);
+  }
+
+  // ---- Relay hosts ----
+
+  @override
+  Future<HostConfig> pairRelay(String link, {required String deviceName, void Function(RelayPairPhase phase)? onPhase}) async {
+    await _load();
+    final inv = RelayInvite.parse(link);
+    // Pairing again with the same host replaces its saved entry.
+    final existing = _list.where((h) => h.config.isRelay && h.config.relay?.route == inv.route).firstOrNull;
+    final id = existing?.config.id ?? _freeId(_slug(inv.label.isEmpty ? 'relay' : inv.label));
+    final dev = DhKey.generate();
+    onPhase?.call(RelayPairPhase.connecting);
+    final paired = await _relay.pair(inv, dev, name: deviceName, platform: relayPlatform, onPending: () => onPhase?.call(RelayPairPhase.waitingApproval));
+    final keyId = 'relay-$id';
+    await _keys.writeSecret(relayKeySlot(keyId), b64url(dev.private));
+    final label = paired.host.isNotEmpty ? paired.host : inv.label;
+    final config = HostConfig(
+      id: id,
+      name: existing?.config.name ?? (label.isEmpty ? 'relay' : label),
+      host: Uri.parse(inv.relayUrl).host,
+      port: 0,
+      user: '',
+      keyId: keyId,
+      transport: HostTransport.relay,
+      relay: RelayHostInfo(
+        relayUrl: inv.relayUrl,
+        route: inv.route,
+        hostKey: b64url(inv.hostKey),
+        deviceId: paired.device.id.isEmpty ? relayDeviceId(dev.public) : paired.device.id,
+        scope: RelayScope.parse(paired.device.scope),
+        sessions: paired.device.sessions,
+        kind: paired.device.kind,
+        label: label,
+      ),
+    );
+    await _dialers.remove(id)?.close();
+    await save(config);
+    unawaited(connect(id).catchError((Object _) {}));
+    return config;
+  }
+
+  String _freeId(String base) {
+    var id = base.isEmpty ? 'relay' : base;
+    for (var n = 2; _hosts.containsKey(id); n++) {
+      id = '$base-$n';
+    }
+    return id;
+  }
+
+  static String _slug(String s) => s.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9._-]+'), '-');
+
+  @override
+  Future<ByteChannel> agentdChannel(String hostId) async {
+    await _load();
+    var t = await _relayTunnel(hostId);
+    try {
+      return t.open();
+    } on RelayError {
+      // The tunnel died between the check and the open: one retry.
+      t = await _relayTunnel(hostId);
+      return t.open();
+    }
+  }
+
+  Future<RelayDialer> _dialer(String hostId) async {
+    final d = _dialers[hostId];
+    if (d != null) return d;
+    final c = _hosts[hostId]?.config;
+    final info = c?.relay;
+    if (c == null || info == null) throw ArgumentError.value(hostId, 'hostId', 'not a relay host');
+    final secret = await _keys.readSecret(relayKeySlot(c.keyId ?? hostId));
+    if (secret == null) throw const SshCredentialsError('no relay device key stored for this host');
+    final target = RelayTarget(
+      relayUrl: info.relayUrl,
+      route: info.route,
+      hostKey: unb64url(info.hostKey),
+      device: DhKey.fromPrivate(unb64url(secret)),
+      platform: relayPlatform,
+    );
+    return _dialers[hostId] ??= RelayDialer(_relay, target);
+  }
+
+  /// The live tunnel of a relay host, opened when needed. A new tunnel
+  /// refreshes the device's scope from the welcome and marks the host online.
+  Future<RelayTunnel> _relayTunnel(String hostId) async {
+    final d = await _dialer(hostId);
+    final had = d.current;
+    final t = await d.tunnel();
+    if (!identical(had, t)) await _onTunnel(hostId, d, t);
+    return t;
+  }
+
+  Future<void> _onTunnel(String hostId, RelayDialer d, RelayTunnel t) async {
+    final h = _hosts[hostId];
+    final info = h?.config.relay;
+    if (h == null || info == null) return;
+    final dev = t.welcome.device;
+    final updated = info.copyWith(
+      scope: dev == null ? null : RelayScope.parse(dev.scope),
+      sessions: dev?.sessions,
+      kind: dev == null || dev.kind.isEmpty ? null : dev.kind,
+      label: t.welcome.host.isEmpty ? null : t.welcome.host,
+    );
+    final config = updated.sameAs(info) ? h.config : h.config.copyWith(relay: updated);
+    _hosts[hostId] = HostStatus(config, state: HostState.online, capabilities: relayCapabilities, sessionCount: h.sessionCount);
+    _attempts.remove(hostId);
+    _notify();
+    if (!identical(config, h.config)) await _persist();
+    unawaited(
+      t.done.then((_) {
+        if (_disposed || !_hosts.containsKey(hostId) || _off.contains(hostId) || d.current != null || !identical(_dialers[hostId], d)) return;
+        _set(hostId, (h) => HostStatus(h.config, state: HostState.offline, capabilities: h.capabilities, error: 'Conexión perdida'));
+        _scheduleReconnect(hostId);
+      }),
+    );
+  }
+
+  /// A ping through the live tunnel; a tunnel that does not answer within
+  /// [probeTimeout] (dropped while the app slept) is closed and reopened.
+  Future<void> _probeRelay(String hostId, RelayTunnel t) async {
+    var alive = false;
+    try {
+      await AgentdClient(() async => t.open(), timeout: probeTimeout).ping();
+      alive = true;
+    } catch (_) {}
+    if (alive || _disposed) return;
+    await t.close();
+    _retry.remove(hostId)?.cancel();
+    _attempts.remove(hostId);
+    await connect(hostId).catchError((Object _) {});
   }
 
   @override
@@ -350,6 +514,10 @@ class SshHostsRepository implements HostsRepository {
     }
     _retry.clear();
     await _pool.dispose();
+    for (final d in _dialers.values) {
+      await d.close();
+    }
+    _dialers.clear();
     await _changes.close();
   }
 }
@@ -357,6 +525,9 @@ class SshHostsRepository implements HostsRepository {
 /// User-facing (Spanish) text for a connect failure. Never includes
 /// credentials.
 String describeConnectError(Object e) {
+  if (e is RelayError) return describeRelayError(e);
+  if (e is InviteFormatError) return 'Enlace de invitación no válido';
+  if (e is NoShellOverRelay) return 'Un host por relay no tiene shell (solo sesiones de agentd)';
   if (e is HostKeyMismatch) return 'La huella del host cambió (${e.actual}): posible suplantación. Borra la huella guardada solo si sabes por qué cambió.';
   if (e is HostKeyRejected) return 'Huella del host no aceptada';
   if (e is SshCredentialsError) return 'Sin credenciales válidas para este host';
@@ -367,3 +538,31 @@ String describeConnectError(Object e) {
   if (e is EnrollError) return e.message;
   return 'Error de conexión';
 }
+
+/// Secure-store slot of a relay device key (X25519 private, base64url).
+String relayKeySlot(String keyId) => 'agentd.relay.key.$keyId';
+
+/// What a relay host reports when it is online: agentd only (no shell, so
+/// no zellij/tmux, provisioning or folder browsing).
+const relayCapabilities = HostCapabilities(agentdSocket: 'relay', tools: {'agentd': ToolInfo('agentd', installed: true)});
+
+/// [HostsRepository.shell] on a relay host.
+class NoShellOverRelay implements Exception {
+  const NoShellOverRelay();
+
+  @override
+  String toString() => 'NoShellOverRelay: relay hosts have no shell';
+}
+
+/// User-facing (Spanish) text for a relay failure.
+String describeRelayError(RelayError e) => switch (e.failure) {
+  RelayFailure.hostOffline => 'El host no está conectado al relay (¿agentd parado o [relay] desactivado?)',
+  RelayFailure.hostNoAnswer => 'El host no respondió a tiempo',
+  RelayFailure.rateLimited => 'Demasiados intentos; prueba en un minuto',
+  RelayFailure.tooManyTunnels => 'Demasiadas conexiones a este host',
+  RelayFailure.unreachable => 'No se pudo conectar con el relay',
+  RelayFailure.handshake => 'Fallo en el saludo cifrado (invitación usada o caducada, o la clave del host cambió)',
+  RelayFailure.refused => e.code == 'forbidden' ? 'El host no reconoce este dispositivo (¿revocado?)' : 'El host rechazó la conexión: ${e.message}',
+  RelayFailure.denied => 'El host rechazó el emparejamiento',
+  RelayFailure.protocol => 'Conexión con el relay perdida',
+};

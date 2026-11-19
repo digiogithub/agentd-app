@@ -1,4 +1,7 @@
-// Add a host by SSH: name, address, user, authentication.
+// Add a host by SSH (name, address, user, authentication) or by an
+// agentd-relay invite link (`agentd relay invite` on the host).
+
+import 'dart:io' show Platform;
 
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,7 +21,9 @@ const _authOptions = [
 ];
 
 class AddHostScreen extends ConsumerStatefulWidget {
-  const AddHostScreen({super.key});
+  /// [relayLink] opens the relay form with this invite (a deep link).
+  const AddHostScreen({super.key, this.relayLink});
+  final String? relayLink;
 
   @override
   ConsumerState<AddHostScreen> createState() => _AddHostScreenState();
@@ -30,13 +35,22 @@ class _AddHostScreenState extends ConsumerState<AddHostScreen> {
   final _port = TextEditingController(text: '22');
   final _user = TextEditingController();
   final _password = TextEditingController();
+  final _link = TextEditingController();
+  final _deviceName = TextEditingController(text: Platform.isIOS ? 'iPhone' : 'Android');
   AuthKind _auth = AuthKind.generatedKey;
+  HostTransport _transport = HostTransport.ssh;
+  RelayPairPhase? _phase;
   String? _publicKey;
   bool _busy = false;
 
   @override
   void initState() {
     super.initState();
+    final link = widget.relayLink;
+    if (link != null) {
+      _transport = HostTransport.relay;
+      _link.text = link;
+    }
     ref.read(hostsRepositoryProvider).publicKey().then((k) {
       if (mounted) setState(() => _publicKey = k);
     }, onError: (Object _) {});
@@ -44,7 +58,7 @@ class _AddHostScreenState extends ConsumerState<AddHostScreen> {
 
   @override
   void dispose() {
-    for (final c in [_name, _host, _port, _user, _password]) {
+    for (final c in [_name, _host, _port, _user, _password, _link, _deviceName]) {
       c.dispose();
     }
     super.dispose();
@@ -91,8 +105,68 @@ class _AddHostScreenState extends ConsumerState<AddHostScreen> {
     }
   }
 
+  Future<void> _pasteLink() async {
+    final d = await Clipboard.getData(Clipboard.kTextPlain);
+    final t = d?.text?.trim() ?? '';
+    if (!mounted) return;
+    if (t.isEmpty) {
+      showToast(context, 'El portapapeles está vacío');
+      return;
+    }
+    setState(() => _link.text = t);
+  }
+
+  Future<void> _pair() async {
+    final link = _link.text.trim();
+    if (!link.startsWith('agentd://relay?')) {
+      showToast(context, 'Pega el enlace agentd://relay?… de agentd relay invite');
+      return;
+    }
+    final name = _deviceName.text.trim().isEmpty ? 'Móvil' : _deviceName.text.trim();
+    setState(() {
+      _busy = true;
+      _phase = RelayPairPhase.connecting;
+    });
+    try {
+      final c = await ref
+          .read(hostsRepositoryProvider)
+          .pairRelay(
+            link,
+            deviceName: name,
+            onPhase: (p) {
+              if (mounted) setState(() => _phase = p);
+            },
+          );
+      // The link holds a one-time secret: do not keep it around.
+      _link.clear();
+      if (!mounted) return;
+      showToast(context, 'Emparejado con ${c.name}');
+      Navigator.of(context).maybePop();
+    } catch (e) {
+      if (mounted) showToast(context, 'No se pudo emparejar: ${describeConnectError(e)}');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _phase = null;
+        });
+      }
+    }
+  }
+
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => _transport == HostTransport.relay ? _relayForm() : _sshForm();
+
+  Widget _transportToggle() => SegmentedControl<HostTransport>(
+    radio: true,
+    options: const [(HostTransport.ssh, 'SSH'), (HostTransport.relay, 'Invitación relay')],
+    value: _transport,
+    onChanged: (t) {
+      if (!_busy) setState(() => _transport = t);
+    },
+  );
+
+  Widget _relayForm() => Scaffold(
     body: SafeArea(
       child: Column(
         children: [
@@ -101,6 +175,101 @@ class _AddHostScreenState extends ConsumerState<AddHostScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
               children: [
+                _transportToggle(),
+                const SizedBox(height: 16),
+                Text(
+                  'Sin SSH ni puertos abiertos: el host y el móvil se encuentran en un relay (agentd-relay) con cifrado de extremo a extremo. En el host ejecuta agentd relay invite y pega aquí el enlace agentd://relay?…',
+                  style: AppFonts.inter(size: 13.5, color: AppColors.secondary, height: 1.45),
+                ),
+                const SizedBox(height: 16),
+                LabeledField(
+                  label: 'Enlace de invitación',
+                  child: AppTextField(
+                    key: const ValueKey('relay-link'),
+                    controller: _link,
+                    hint: 'agentd://relay?v=1&u=…',
+                    mono: true,
+                    enabled: !_busy,
+                    keyboardType: TextInputType.url,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: AppButton(label: 'Pegar del portapapeles', style: AppButtonStyle.outline, icon: Icons.content_paste, onPressed: _busy ? null : _pasteLink),
+                ),
+                const SizedBox(height: 16),
+                LabeledField(
+                  label: 'Nombre de este dispositivo',
+                  child: AppTextField(key: const ValueKey('relay-device-name'), controller: _deviceName, hint: 'Pixel de Ana', enabled: !_busy),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'El host decide qué puede hacer este móvil: ver, operar (escribir a los agentes, aprobar; equivale a una terminal del host) o admin (también lanzar y terminar sesiones). Por relay solo hay sesiones de agentd: zellij, tmux, shells e instalación necesitan SSH.',
+                  style: AppText.caption,
+                ),
+                if (_phase == RelayPairPhase.waitingApproval) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    key: const ValueKey('relay-waiting-approval'),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(color: AppColors.waitingBg, borderRadius: BorderRadius.circular(12)),
+                    child: Row(
+                      children: [
+                        SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.waiting)),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Aprueba en el host', style: AppFonts.inter(size: 14, weight: FontWeight.w600)),
+                              const SizedBox(height: 2),
+                              Text('agentd relay invite pregunta si aceptas este dispositivo: responde y en el host.', style: AppText.caption),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: AppColors.divider)),
+            ),
+            child: AppButton(
+              label: switch (_phase) {
+                RelayPairPhase.connecting => 'Conectando…',
+                RelayPairPhase.waitingApproval => 'Esperando aprobación…',
+                null => 'Emparejar',
+              },
+              height: 52,
+              radius: 14,
+              fontSize: 15,
+              bold: true,
+              expand: true,
+              onPressed: _busy ? null : _pair,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _sshForm() => Scaffold(
+    body: SafeArea(
+      child: Column(
+        children: [
+          const RouteHeader(title: 'Añadir host'),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+              children: [
+                _transportToggle(),
+                const SizedBox(height: 16),
                 Row(
                   children: [
                     Expanded(
