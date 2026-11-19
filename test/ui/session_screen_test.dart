@@ -61,7 +61,7 @@ void main() {
       await settle(tester);
       expect(find.byType(TerminalView), findsOneWidget);
       expect(f.sessions.calls.where((c) => c.method == 'terminal').single.arg, false);
-      expect(find.text('Control: tus teclas llegan al agente y el PTY se ajusta a esta pantalla.'), findsOneWidget);
+      expect(find.textContaining('Control: tus teclas llegan al agente y el PTY se ajusta a esta pantalla.'), findsOneWidget);
       // Control mode: the PTY takes the view's size.
       final pty = f.sessions.ptys.single;
       expect(pty.resizes, isNotEmpty);

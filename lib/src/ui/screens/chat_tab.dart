@@ -487,8 +487,8 @@ class ChatItemView extends StatelessWidget {
               ),
               child: Consumer(
                 builder: (context, ref, _) {
-                  final font = ref.watch(settingsProvider.select((s) => (s.chatFont, s.chatFontSize)));
-                  return LinkifiedText(item.text, style: AppFonts.chat(font.$1, size: font.$2, height: 1.45));
+                  final font = ref.watch(settingsProvider.select((s) => (s.chatFont, s.chatFontSize, s.chatLineHeight)));
+                  return LinkifiedText(item.text, style: AppFonts.chat(font.$1, size: font.$2, height: 1.45 * font.$3.factor));
                 },
               ),
             ),
@@ -699,9 +699,9 @@ class _AgentText extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final font = ref.watch(settingsProvider.select((s) => (s.chatFont, s.chatFontSize)));
+    final font = ref.watch(settingsProvider.select((s) => (s.chatFont, s.chatFontSize, s.chatLineHeight)));
     final segs = parseChatSegments(text);
-    Widget prose(String t) => MarkupText(t, style: AppFonts.chat(font.$1, size: font.$2, height: 1.5), codeColor: AppColors.accentLight);
+    Widget prose(String t) => MarkupText(t, style: AppFonts.chat(font.$1, size: font.$2, height: 1.5 * font.$3.factor), codeColor: AppColors.accentLight);
     if (segs.length <= 1 && (segs.isEmpty || segs.first is TextSegment)) return prose(text);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

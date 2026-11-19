@@ -21,6 +21,15 @@ void main() {
     expect(appSettingsFromJson({}).chatFontSize, kDefaultChatFontSize);
   });
 
+  test('reading fonts and line spacing round trip; unknown spacing is normal', () {
+    const s = AppSettings(chatFont: ChatFont.reading, chatLineHeight: ChatLineHeight.wide, muted: []);
+    final back = appSettingsFromJson(s.toJson());
+    expect((back.chatFont, back.chatLineHeight), (ChatFont.reading, ChatLineHeight.wide));
+    expect(appSettingsFromJson({'chatFont': 'legible'}).chatFont, ChatFont.legible);
+    expect(appSettingsFromJson({'chatLineHeight': 'huge'}).chatLineHeight, ChatLineHeight.normal);
+    expect(chatFontOrder.toSet(), ChatFont.values.toSet());
+  });
+
   test('broken or missing settings fall back to defaults without sample mutes', () {
     expect(appSettingsFromJson(null).muted, isEmpty);
     final s = appSettingsFromJson({'theme': 'neon', 'notifyWaiting': 'yes', 'muted': 3});

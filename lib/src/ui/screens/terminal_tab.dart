@@ -13,6 +13,7 @@ import '../providers.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/key_bar.dart';
+import '../widgets/terminal_touch_scroll.dart';
 
 // The terminal stays dark in both modes: agent TUIs assume a dark background.
 final _d = AppPalette.dark;
@@ -64,6 +65,9 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
   int _generation = 0;
   Timer? _resizeTimer;
   (int, int)? _sent;
+
+  static const _fontSize = 11.5;
+  static const _lineHeight = 1.25;
 
   /// Coalesces view size changes (soft keyboard, rotation) before the PTY is
   /// resized: every resize makes the agent redraw its whole screen.
@@ -224,12 +228,17 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
                   )
                 : Semantics(
                     label: 'Terminal de la sesión',
-                    child: TerminalView(
-                      _terminal,
-                      theme: terminalTheme,
-                      textStyle: TerminalStyle(fontSize: 11.5, height: 1.25, fontFamily: AppFonts.monoFamily),
-                      readOnly: widget.observe,
-                      keyboardAppearance: Brightness.dark,
+                    child: TerminalTouchScroll(
+                      terminal: _terminal,
+                      lineHeight: MediaQuery.textScalerOf(context).scale(_fontSize) * _lineHeight,
+                      enabled: !widget.observe,
+                      child: TerminalView(
+                        _terminal,
+                        theme: terminalTheme,
+                        textStyle: TerminalStyle(fontSize: _fontSize, height: _lineHeight, fontFamily: AppFonts.monoFamily),
+                        readOnly: widget.observe,
+                        keyboardAppearance: Brightness.dark,
+                      ),
                     ),
                   ),
           ),
@@ -270,7 +279,9 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 2),
                 child: Text(
-                  control ? 'Control: tus teclas llegan al agente y el PTY se ajusta a esta pantalla.' : 'Observar: solo lectura, nadie ve tus pulsaciones.',
+                  control
+                      ? 'Control: tus teclas llegan al agente y el PTY se ajusta a esta pantalla. Desliza el dedo o usa pg↑ / pg↓ para desplazarte.'
+                      : 'Observar: solo lectura, nadie ve tus pulsaciones.',
                   style: AppFonts.inter(size: 11.5, color: AppColors.muted),
                 ),
               ),

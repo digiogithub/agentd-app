@@ -64,21 +64,33 @@ class ChatFontControls extends ConsumerWidget {
         const SizedBox(height: 14),
         Text('Tipo de letra', style: AppFonts.inter(size: 15)),
         const SizedBox(height: 8),
-        SegmentedControl<ChatFont>(
+        for (final f in chatFontOrder)
+          _FontOption(
+            font: f,
+            selected: s.chatFont == f,
+            onTap: () => n.update((x) => x.copyWith(chatFont: f)),
+          ),
+        const SizedBox(height: 14),
+        Text('Interlineado', style: AppFonts.inter(size: 15)),
+        const SizedBox(height: 8),
+        SegmentedControl<ChatLineHeight>(
           radio: true,
           height: 40,
-          options: [for (final f in ChatFont.values) (f, chatFontLabel(f))],
-          value: s.chatFont,
-          onChanged: (f) => n.update((x) => x.copyWith(chatFont: f)),
+          options: [
+            for (final h in ChatLineHeight.values) (h, chatLineHeightLabel(h)),
+          ],
+          value: s.chatLineHeight,
+          onChanged: (h) => n.update((x) => x.copyWith(chatLineHeight: h)),
         ),
         const SizedBox(height: 12),
         Text(
-          'Así se verá el texto del agente.',
+          'Así se verá el texto del agente: párrafos largos, código y '
+          'listas se leen con este tipo de letra.',
           style: AppFonts.chat(
             s.chatFont,
             size: size,
             color: AppColors.secondary,
-            height: 1.45,
+            height: 1.5 * s.chatLineHeight.factor,
           ),
         ),
         if (size != kDefaultChatFontSize)
@@ -97,6 +109,51 @@ class ChatFontControls extends ConsumerWidget {
   }
 }
 
+/// One chat font choice, its label drawn in that font.
+class _FontOption extends StatelessWidget {
+  const _FontOption({
+    required this.font,
+    required this.selected,
+    required this.onTap,
+  });
+  final ChatFont font;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    inMutuallyExclusiveGroup: true,
+    checked: selected,
+    button: true,
+    label: chatFontLabel(font),
+    excludeSemantics: true,
+    child: InkWell(
+      key: ValueKey('chat-font-${font.name}'),
+      borderRadius: BorderRadius.circular(10),
+      onTap: onTap,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44),
+        child: Row(
+          children: [
+            Icon(
+              selected ? Icons.radio_button_checked : Icons.radio_button_off,
+              size: 20,
+              color: selected ? AppColors.accent : AppColors.muted,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                chatFontLabel(font),
+                style: AppFonts.chat(font, size: 15, color: AppColors.text),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 /// Bottom sheet with [ChatFontControls] (from the session's menu).
 Future<void> showChatFontSheet(BuildContext context) =>
     showModalBottomSheet<void>(
@@ -104,7 +161,7 @@ Future<void> showChatFontSheet(BuildContext context) =>
       backgroundColor: AppColors.surface,
       showDragHandle: true,
       builder: (ctx) => const SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: EdgeInsets.fromLTRB(20, 0, 20, 20),
           child: ChatFontControls(),
         ),

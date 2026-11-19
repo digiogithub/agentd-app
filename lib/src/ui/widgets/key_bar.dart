@@ -1,4 +1,4 @@
-// Key bar of the terminal view: esc tab ctrl arrows enter.
+// Key bar of the terminal view: esc tab ctrl arrows page up/down enter.
 
 import 'package:material_ui/material_ui.dart';
 
@@ -19,6 +19,8 @@ const terminalKeys = [
   TermKey('↓', 'Abajo', 'down'),
   TermKey('←', 'Izquierda', 'left'),
   TermKey('→', 'Derecha', 'right'),
+  TermKey('pg↑', 'Página arriba', 'pgup'),
+  TermKey('pg↓', 'Página abajo', 'pgdown'),
   TermKey('⏎', 'Intro', 'enter'),
 ];
 
@@ -32,7 +34,7 @@ class KeyBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(
     children: [
-      for (final (i, k) in keys.indexed) ...[if (i > 0) const SizedBox(width: 6), Expanded(child: _key(k))],
+      for (final (i, k) in keys.indexed) ...[if (i > 0) const SizedBox(width: 4), Expanded(child: _key(k))],
     ],
   );
 
@@ -61,7 +63,7 @@ class KeyBar extends StatelessWidget {
               child: Center(
                 child: Text(
                   k.label,
-                  style: AppFonts.mono(size: 12.5, weight: FontWeight.w500, color: armed ? AppColors.accentLight : AppColors.text),
+                  style: AppFonts.mono(size: 12, weight: FontWeight.w500, color: armed ? AppColors.accentLight : AppColors.text),
                 ),
               ),
             ),
@@ -85,6 +87,8 @@ List<int>? keyBytes(String name) {
     'down': '\x1b[B',
     'right': '\x1b[C',
     'left': '\x1b[D',
+    'pgup': '\x1b[5~',
+    'pgdown': '\x1b[6~',
     'backspace': '\x7f',
     'space': ' ',
   };

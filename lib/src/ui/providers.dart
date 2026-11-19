@@ -88,6 +88,7 @@ class AppSettings {
     this.agentsGrouping = AgentsGrouping.project,
     this.chatFontSize = kDefaultChatFontSize,
     this.chatFont = ChatFont.sans,
+    this.chatLineHeight = ChatLineHeight.normal,
     this.keepConnected = true,
   });
 
@@ -106,6 +107,9 @@ class AppSettings {
   /// Font of the chat view's prose.
   final ChatFont chatFont;
 
+  /// Line spacing of the chat view's prose.
+  final ChatLineHeight chatLineHeight;
+
   /// Android: while a host is online keep a "connected" notification (a
   /// foreground service) so connections and agent notifications survive in
   /// the background.
@@ -122,6 +126,7 @@ class AppSettings {
     AgentsGrouping? agentsGrouping,
     double? chatFontSize,
     ChatFont? chatFont,
+    ChatLineHeight? chatLineHeight,
     bool? keepConnected,
   }) => AppSettings(
     notifyWaiting: notifyWaiting ?? this.notifyWaiting,
@@ -134,6 +139,7 @@ class AppSettings {
     agentsGrouping: agentsGrouping ?? this.agentsGrouping,
     chatFontSize: chatFontSize ?? this.chatFontSize,
     chatFont: chatFont ?? this.chatFont,
+    chatLineHeight: chatLineHeight ?? this.chatLineHeight,
     keepConnected: keepConnected ?? this.keepConnected,
   );
 }
@@ -142,14 +148,38 @@ const double kDefaultChatFontSize = 14.5;
 const double kMinChatFontSize = 11;
 const double kMaxChatFontSize = 24;
 
-/// Chat prose fonts: Inter, a serif (Noto Serif), JetBrains Mono.
-enum ChatFont { sans, serif, mono }
+/// Chat prose fonts: Inter, a serif (Noto Serif), JetBrains Mono, and two
+/// fonts made for reading: Atkinson Hyperlegible Next (legibility) and
+/// Literata (long-form screen reading). Stored by name: append only.
+enum ChatFont { sans, serif, mono, legible, reading }
+
+/// Chat fonts in the order the UI offers them.
+const chatFontOrder = [ChatFont.sans, ChatFont.legible, ChatFont.reading, ChatFont.serif, ChatFont.mono];
 
 /// Label of a chat font.
 String chatFontLabel(ChatFont f) => switch (f) {
-  ChatFont.sans => 'Sans',
+  ChatFont.sans => 'Sans (Inter)',
+  ChatFont.legible => 'Legible (Atkinson Hyperlegible)',
+  ChatFont.reading => 'Lectura (Literata)',
   ChatFont.serif => 'Serif',
   ChatFont.mono => 'Mono',
+};
+
+/// Line spacing of the chat prose; [factor] scales the default line height.
+enum ChatLineHeight {
+  compact(0.9),
+  normal(1),
+  wide(1.2);
+
+  const ChatLineHeight(this.factor);
+  final double factor;
+}
+
+/// Label of a chat line spacing.
+String chatLineHeightLabel(ChatLineHeight h) => switch (h) {
+  ChatLineHeight.compact => 'Compacto',
+  ChatLineHeight.normal => 'Normal',
+  ChatLineHeight.wide => 'Amplio',
 };
 
 extension AppSettingsJson on AppSettings {
@@ -164,6 +194,7 @@ extension AppSettingsJson on AppSettings {
     'agentsGrouping': agentsGrouping.name,
     'chatFontSize': chatFontSize,
     'chatFont': chatFont.name,
+    'chatLineHeight': chatLineHeight.name,
     'keepConnected': keepConnected,
   };
 }
@@ -175,6 +206,7 @@ AppSettings appSettingsFromJson(Object? json, {AppSettings fallback = const AppS
   final theme = ThemeChoice.values.where((t) => t.name == json['theme']).firstOrNull ?? fallback.theme;
   final grouping = AgentsGrouping.values.where((g) => g.name == json['agentsGrouping']).firstOrNull ?? fallback.agentsGrouping;
   final chatFont = ChatFont.values.where((f) => f.name == json['chatFont']).firstOrNull ?? fallback.chatFont;
+  final lineHeight = ChatLineHeight.values.where((h) => h.name == json['chatLineHeight']).firstOrNull ?? fallback.chatLineHeight;
   final size = json['chatFontSize'];
   final chatFontSize = size is num ? size.toDouble().clamp(kMinChatFontSize, kMaxChatFontSize) : fallback.chatFontSize;
   final muted = <MutedSession>[];
@@ -194,6 +226,7 @@ AppSettings appSettingsFromJson(Object? json, {AppSettings fallback = const AppS
     agentsGrouping: grouping,
     chatFontSize: chatFontSize,
     chatFont: chatFont,
+    chatLineHeight: lineHeight,
     keepConnected: b('keepConnected', fallback.keepConnected),
   );
 }

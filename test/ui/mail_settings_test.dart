@@ -86,6 +86,14 @@ void main() {
       await tester.pump();
       final c = ProviderScope.containerOf(tester.element(find.byType(SettingsScreen)));
       expect((c.read(settingsProvider).chatFontSize, c.read(settingsProvider).chatFont), (15.5, ChatFont.serif));
+
+      await tester.tap(find.byKey(const ValueKey('chat-font-reading')));
+      await tester.pump();
+      expect(c.read(settingsProvider).chatFont, ChatFont.reading);
+      await tester.scrollUntilVisible(find.text('Amplio'), 200, scrollable: find.byType(Scrollable).first);
+      await tester.tap(find.text('Amplio'));
+      await tester.pump();
+      expect(c.read(settingsProvider).chatLineHeight, ChatLineHeight.wide);
     });
 
     testWidgets('picks and persists the dictation language', (tester) async {

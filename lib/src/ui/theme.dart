@@ -215,6 +215,12 @@ abstract final class AppFonts {
       case ChatFont.serif:
         final base = TextStyle(fontSize: size, fontWeight: weight, color: color ?? AppColors.text, height: height);
         return _google ? GoogleFonts.notoSerif(textStyle: base) : base.copyWith(fontFamily: 'serif');
+      case ChatFont.legible:
+        final base = TextStyle(fontSize: size, fontWeight: weight, color: color ?? AppColors.text, height: height);
+        return _google ? GoogleFonts.atkinsonHyperlegibleNext(textStyle: base) : base.copyWith(fontFamily: 'Atkinson Hyperlegible Next');
+      case ChatFont.reading:
+        final base = TextStyle(fontSize: size, fontWeight: weight, color: color ?? AppColors.text, height: height);
+        return _google ? GoogleFonts.literata(textStyle: base) : base.copyWith(fontFamily: 'Literata', fontFamilyFallback: const ['serif']);
     }
   }
 
