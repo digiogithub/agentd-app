@@ -29,6 +29,22 @@ flutter build apk --debug
 Tests never run real agent CLIs or installers; the data layer is tested against a fake daemon
 and fake remote shells.
 
+## One prompt to several agents
+
+In the Agentes tab, the checklist button of the header (**Seleccionar varios**) turns the list
+into checkboxes: a tap picks a session instead of opening it. Quick picks under the filters
+select every session shown (**Mostrados**, the filter and the search apply), every session of
+one host (when more than one host has sessions that can be picked) or none. The bar at the
+bottom sends the text as a prompt to each picked agent at once.
+
+- Only agentd sessions that are running can be picked, on hosts where this device may operate.
+  zellij, tmux and terminal-only rows, finished or starting sessions and view-only relay hosts
+  are listed but disabled, with the reason.
+- An agent that is working gets the prompt anyway (as in the chat); the others get it normally.
+- Agents that took the prompt are unselected and counted in the confirmation. Agents that
+  refused it stay selected, named with the cause, so you can retry. When all took it, the draft
+  is cleared and the selection mode ends. Leaving the mode clears the selection.
+
 ## Panel (work dashboard)
 
 The first tab. It shows, across every connected host whose agentd has the

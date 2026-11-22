@@ -242,3 +242,79 @@ class SessionRow extends StatelessWidget {
     );
   }
 }
+
+/// Row of the selection mode (broadcast prompt): a checkbox instead of a
+/// link. [reason] says why the session cannot be picked; null = selectable.
+class PickRow extends StatelessWidget {
+  const PickRow({super.key, required this.session, required this.hostName, required this.picked, required this.onToggle, this.reason});
+  final AgentSession session;
+  final String hostName;
+  final bool picked;
+  final String? reason;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = session;
+    final enabled = reason == null;
+    final on = enabled && picked;
+    final sub = [if (hostName.isNotEmpty) hostName, reason ?? statusLabel(s.status)].join(' · ');
+    return Opacity(
+      opacity: enabled ? 1 : 0.5,
+      child: Semantics(
+        container: true,
+        checked: on,
+        enabled: enabled,
+        label: 'Seleccionar ${sessionTitle(s)}',
+        excludeSemantics: true,
+        child: Material(
+          color: on ? AppColors.accentBg : AppColors.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(color: on ? AppColors.accent : AppColors.border),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: enabled ? onToggle : null,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 56),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 22,
+                      height: 22,
+                      decoration: BoxDecoration(
+                        color: on ? AppColors.accent : Colors.transparent,
+                        borderRadius: BorderRadius.circular(7),
+                        border: Border.all(color: on ? AppColors.accent : AppColors.border, width: 2),
+                      ),
+                      child: on ? Icon(Icons.check, size: 14, color: AppColors.bg) : null,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(sessionTitle(s), style: AppText.cardTitle, overflow: TextOverflow.ellipsis),
+                          const SizedBox(height: 3),
+                          Text(
+                            sub,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppFonts.inter(size: 12, color: AppColors.muted),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

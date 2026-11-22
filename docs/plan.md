@@ -114,6 +114,28 @@ Spec: `agentd/docs/plans/agentd/workspace-ux_plan.md` (same behaviour on the des
 - **Folder browser**: `SessionsRepository.listDir(hostId, path, {hidden})` runs one POSIX sh script (`data/list_dir.dart`, path single-quoted, NUL separated output, flag 1/0 for readable+traversable, cap 2000, exit 3 = `No existe`, 4 = `Sin permiso`) over the host shell; the parser is pure Dart. `screens/folder_browser_screen.dart` is a full-screen route (breadcrumb up to `/`, Inicio, Subir, Mostrar ocultas, greyed locked folders, `Usar esta carpeta`). Tests run the script under real `sh` (`test/data/list_dir_test.dart`).
 - **Terminate**: `SessionsRepository.terminate(s)`: agentd `kill KILL`, poll `ls` until exited (5 s), `rm` (exited: only `rm`); zellij `kill-session` + `delete-session --force`; tmux `kill-session`; SSH shell closes its PTY. UI (`ui/terminate.dart`): `Terminar` in the session screen menu and long-press on a list row, confirm dialog, then back to the list.
 
+## Broadcast prompt (selection mode of the Agents list)
+
+Same feature as agentd-desktop AGED-US-0050 (agentd `docs/plans/agentd/broadcast-prompt_plan.md`).
+Client only: no contract, wire or daemon change. Added on 2026-11-22, version 1.3.0.
+
+- State lives in `_AgentsScreenState` (`ui/screens/agents_screen.dart`): `_selecting`, `_picked`
+  (session keys), `_draft`, `_sending`, `_sendError`. Leaving the mode clears the selection.
+- Selectable (`_pickBlock` returns null): agentd source, status not `exited` / `starting`,
+  `HostConfig.canOperate`. Other rows render as a disabled `PickRow` (`ui/widgets/session_card.dart`)
+  with the reason.
+- Quick picks (`pick-all`, `pick-host:<id>`, `pick-none`) work on the sessions shown, so the
+  filter chips and the search apply. Host picks appear with two or more hosts.
+- `_sendAll`: `SessionsRepository.prompt` per target with `Future.wait` (parallel). The
+  repository already forces only while the session is `working` and sends no `revision`.
+  Delivered sessions are unselected and counted in a toast; refused ones stay selected and are
+  named in the bar with the cause of the first refusal (`sendErrorMessage`). All delivered =
+  draft cleared (when unchanged) and mode off.
+- Mobile layout: the composer is a bar docked under the list and replaces the `Nueva sesión`
+  FAB while the mode is on; the quick picks are a horizontally scrolling row under the filters.
+- Tests: `test/ui/broadcast_prompt_test.dart` (`FakeSessionsRepository.promptErrors` fails
+  single sessions).
+
 ## Relay transport (agentd-relay)
 
 Protocol v1 and design live in agentd: `docs/plans/agentd/relay_plan.md` (normative) and

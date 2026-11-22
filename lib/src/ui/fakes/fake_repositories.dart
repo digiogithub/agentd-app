@@ -201,6 +201,9 @@ class FakeSessionsRepository implements SessionsRepository {
   Object? chooseError;
   Object? promptError;
 
+  /// Per-session prompt failures, by session name (partial broadcast).
+  final Map<String, Object> promptErrors = {};
+
   AgentSession? byKey(String key) => _sessions[key];
 
   @override
@@ -255,6 +258,9 @@ class FakeSessionsRepository implements SessionsRepository {
   Future<void> prompt(AgentSession s, String text) async {
     calls.add(FakeCall('prompt', s.name, arg: text));
     if (promptError != null) throw promptError!;
+    if (promptErrors[s.name] case final e?) {
+      throw e;
+    }
     _addItem(s.key, ChatItem(role: ChatRole.user, text: text));
     _update(s, status: AgentStatus.working, preview: text);
     _changes.add(null);
