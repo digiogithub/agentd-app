@@ -66,7 +66,10 @@ void main() {
 
   testWidgets('bottom nav switches tabs', (tester) async {
     await pumpUi(tester, const AppShell());
-    expect(find.text('Agentes'), findsWidgets);
+    expect(find.text('Panel'), findsWidgets);
+    await tester.tap(find.bySemanticsLabel('Agentes'));
+    await settle(tester);
+    expect(find.text('3 hosts · 7 sesiones'), findsOneWidget);
     await tester.tap(find.bySemanticsLabel('Hosts'));
     await settle(tester);
     expect(find.text('estudio'), findsWidgets);

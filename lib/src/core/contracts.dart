@@ -617,6 +617,90 @@ abstract class MailRepository {
   Future<void> send(String hostId, {required String to, required String body, String subject = ''});
 }
 
+// ---------------------------------------------------------------------------
+// Work dashboard (agentd only): what each agent is doing, has pending and
+// asks the human. Agents write their tasks; the app only reads them.
+// ---------------------------------------------------------------------------
+
+enum TaskStatus { pending, inProgress, blocked, done, cancelled }
+
+/// One item of an agent's plan. [title] and [note] are agent-written.
+class AgentTask {
+  const AgentTask({required this.id, required this.title, this.status = TaskStatus.pending, this.note, this.updatedAt});
+  final String id;
+  final String title;
+  final TaskStatus status;
+  final String? note;
+  final DateTime? updatedAt;
+}
+
+/// A question an agent asked the human through the mailbox, still open.
+/// Answering it is a mailbox reply to [id].
+class AgentQuestion {
+  const AgentQuestion({required this.id, required this.body, this.options = const [], this.taskId, this.createdAt});
+  final int id;
+  final String body;
+  final List<String> options;
+
+  /// The asking agent's task this question is about (not checked by the daemon).
+  final String? taskId;
+  final DateTime? createdAt;
+}
+
+/// One agentd session on the board.
+class BoardSession {
+  const BoardSession({
+    required this.hostId,
+    required this.name,
+    this.status = AgentStatus.unknown,
+    this.attention = false,
+    this.turn,
+    this.preview,
+    this.tasks = const [],
+    this.questions = const [],
+  });
+  final String hostId;
+  final String name;
+  final AgentStatus status;
+  final bool attention;
+  final int? turn;
+  final String? preview;
+  final List<AgentTask> tasks;
+  final List<AgentQuestion> questions;
+
+  /// Same as [AgentSession.key] of the session.
+  String get key => '$hostId/${SessionSource.agentd.name}/$name';
+
+  int count(TaskStatus s) => tasks.where((t) => t.status == s).length;
+
+  /// Tasks that count for progress (cancelled ones do not).
+  int get total => tasks.length - count(TaskStatus.cancelled);
+  int get done => count(TaskStatus.done);
+
+  /// The first task in progress.
+  AgentTask? get current => tasks.where((t) => t.status == TaskStatus.inProgress).firstOrNull;
+}
+
+/// The board of one host. [available] is false while the host has no
+/// reachable agentd or its daemon has no board (older than the dashboard).
+class HostBoard {
+  const HostBoard({required this.hostId, this.sessions = const [], this.unreadHuman = 0, this.available = true});
+  final String hostId;
+  final List<BoardSession> sessions;
+
+  /// Unread messages of the user's mailbox.
+  final int unreadHuman;
+  final bool available;
+}
+
+abstract class BoardRepository {
+  /// The board of [hostId], kept live while listened to.
+  Stream<HostBoard> watch(String hostId);
+
+  /// Answers question [questionId] (a mailbox reply; it closes the question).
+  Future<void> answer(String hostId, int questionId, String body);
+}
+
 enum ProvisionStep { download, verify, install, service, hcListener, mcp, cli }
 
 class ProvisionEvent {

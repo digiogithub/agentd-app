@@ -267,6 +267,99 @@ List<MailMessage> sampleMail(DateTime now) => [
   ),
 ];
 
+/// Boards of the sample hosts: the Panel mockup on the sample sessions.
+Map<String, HostBoard> sampleBoards(DateTime now) => {
+  'estudio': HostBoard(
+    hostId: 'estudio',
+    unreadHuman: 1,
+    sessions: [
+      BoardSession(
+        hostId: 'estudio',
+        name: 'pando@agentd',
+        status: AgentStatus.working,
+        turn: 3,
+        preview: 'Leyendo internal/hcompat/server.go…',
+        tasks: [
+          AgentTask(id: 't1', title: 'Modelo de tareas y validación', status: TaskStatus.done, updatedAt: now.subtract(const Duration(minutes: 50))),
+          AgentTask(id: 't2', title: 'Órdenes de la línea de comandos', status: TaskStatus.done, updatedAt: now.subtract(const Duration(minutes: 31))),
+          AgentTask(id: 't3', title: 'Pruebas del modelo', status: TaskStatus.done, updatedAt: now.subtract(const Duration(minutes: 20))),
+          AgentTask(id: 't4', title: 'Op board: resumen agregado por sesión', status: TaskStatus.inProgress, updatedAt: now.subtract(const Duration(minutes: 1))),
+          AgentTask(id: 't5', title: 'Persistir tareas en SQLite', status: TaskStatus.inProgress, updatedAt: now.subtract(const Duration(minutes: 4))),
+          const AgentTask(id: 't6', title: 'Eventos task.changed en el bus'),
+          const AgentTask(id: 't7', title: 'Herramientas MCP para informar tareas'),
+        ],
+        questions: [
+          AgentQuestion(
+            id: 310,
+            body:
+                '¿Migro el esquema del buzón a v4 en este mismo cambio o lo separo en otro?\n\n'
+                'Si va junto, el cambio toca también la purga y sus pruebas. Separado son dos revisiones pero cada una es pequeña.',
+            options: const ['En este cambio', 'Cambio aparte'],
+            taskId: 't5',
+            createdAt: now.subtract(const Duration(minutes: 4)),
+          ),
+        ],
+      ),
+      BoardSession(
+        hostId: 'estudio',
+        name: 'claude@webapp',
+        status: AgentStatus.waiting,
+        attention: true,
+        turn: 9,
+        tasks: [
+          AgentTask(id: 't1', title: 'Revisar enlaces rotos', status: TaskStatus.done, updatedAt: now.subtract(const Duration(minutes: 12))),
+          AgentTask(id: 't2', title: 'Pasar las pruebas con -race', status: TaskStatus.inProgress, updatedAt: now.subtract(const Duration(minutes: 1))),
+          const AgentTask(id: 't3', title: 'Actualizar el README'),
+          const AgentTask(id: 't4', title: 'Abrir el PR'),
+        ],
+      ),
+      const BoardSession(
+        hostId: 'estudio',
+        name: 'claude@docs',
+        status: AgentStatus.idle,
+        attention: true,
+        turn: 5,
+        preview: 'README actualizado con la sección de instalación',
+      ),
+    ],
+  ),
+  'vps-hetzner': HostBoard(
+    hostId: 'vps-hetzner',
+    sessions: [
+      BoardSession(
+        hostId: 'vps-hetzner',
+        name: 'codex@api',
+        status: AgentStatus.waiting,
+        attention: true,
+        turn: 14,
+        tasks: [
+          for (final (i, t) in ['Esquema nuevo de orders', 'Script de copia', 'Índices', 'Pruebas de la migración', 'Plan de vuelta atrás'].indexed)
+            AgentTask(id: 't${i + 1}', title: t, status: TaskStatus.done, updatedAt: now.subtract(Duration(minutes: 30 - i))),
+          AgentTask(id: 't6', title: 'Migración de la tabla orders', status: TaskStatus.inProgress, updatedAt: now.subtract(const Duration(minutes: 3))),
+        ],
+      ),
+      BoardSession(
+        hostId: 'vps-hetzner',
+        name: 'codex@webapp',
+        status: AgentStatus.idle,
+        turn: 2,
+        preview: 'Tests en verde, sin cambios pendientes',
+        tasks: [
+          AgentTask(id: 't1', title: 'Tests en verde', status: TaskStatus.done, updatedAt: now.subtract(const Duration(minutes: 45))),
+          AgentTask(
+            id: 't2',
+            title: 'Desplegar en staging',
+            status: TaskStatus.blocked,
+            note: 'Falta la credencial del registro de contenedores',
+            updatedAt: now.subtract(const Duration(minutes: 40)),
+          ),
+          const AgentTask(id: 't3', title: 'Avisar al equipo', status: TaskStatus.cancelled),
+        ],
+      ),
+    ],
+  ),
+};
+
 /// Canned screen of the terminal mockup (ANSI, CRLF line ends).
 const sampleTerminalScreen =
     '\x1b[97m● Bash(go test ./internal/... -race)\x1b[0m\r\n'

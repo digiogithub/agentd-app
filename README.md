@@ -1,8 +1,8 @@
 # agentd-app
 
-Mobile client (Android and iOS) for coding agents over SSH: one inbox of agent sessions across
-hosts (agentd, zellij, tmux, plain SSH shells), chat view, terminal, approvals, the agentd
-mailbox and host provisioning. The desktop client is a separate native app; this project has no
+Mobile client (Android and iOS) for coding agents over SSH: a work dashboard and one inbox of
+agent sessions across hosts (agentd, zellij, tmux, plain SSH shells), chat view, terminal,
+approvals, the agentd mailbox and host provisioning. The desktop client is a separate native app; this project has no
 desktop targets.
 
 Two transports:
@@ -28,6 +28,36 @@ flutter build apk --debug
 
 Tests never run real agent CLIs or installers; the data layer is tested against a fake daemon
 and fake remote shells.
+
+## Panel (work dashboard)
+
+The first tab. It shows, across every connected host whose agentd has the
+work dashboard (op `board`, in the release after 0.7.1):
+
+- **Te esperan**: what needs you. Questions agents asked with `agentd ask` (mailbox messages of
+  kind `question`), menus on an agent's terminal (permissions, questions, plans) and tasks an
+  agent marked as blocked. The first two are shown; the rest open with "N más".
+- **Agentes**: one card per agentd session with the progress of its plan (`done / total`,
+  cancelled tasks do not count) and the task in progress. Agents that reported no tasks show
+  their status and last line.
+- Counters (te esperan, tasks in progress, tasks pending) and a host filter.
+
+Answering without opening the session:
+
+- A question opens a sheet: pick one of its options or write your own answer, then choose where
+  it goes. **Buzón** replies to the question (it closes it; the agent gets the reply when it is
+  free). **Prompt** types the text in the agent's terminal now, even while it works; the question
+  stays open in the mailbox.
+- A permission menu has **Sí** / **No**; other menus list their options in a sheet. Both use
+  `act choose` with the menu's revision and epoch, so a screen that changed is refused.
+- A card opens the agent's task view: tasks grouped as en curso / bloqueadas / pendientes /
+  hechas / canceladas, its open questions, and a message box to its mailbox or its prompt.
+
+Only agents write tasks (`agentd task ...`, MCP `agentd_tasks_set`): the app never adds or edits
+them. Hosts whose daemon has no board yet list their agentd sessions with status and preview.
+Relay devices follow their scope: `view` reads the Panel but can not answer or write; questions
+are only shown to owner devices (the daemon filters them). Push notifications are not part of
+this screen yet.
 
 ## Relay hosts
 

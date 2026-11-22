@@ -372,6 +372,39 @@ MailMessage toMailMessage(AgentdMessage m) => MailMessage(
   queue: m.queue,
 );
 
+/// Task status word → [TaskStatus] (unknown words are pending).
+TaskStatus mapTaskStatus(String status) => switch (status) {
+  'in_progress' => TaskStatus.inProgress,
+  'blocked' => TaskStatus.blocked,
+  'done' => TaskStatus.done,
+  'cancelled' => TaskStatus.cancelled,
+  _ => TaskStatus.pending,
+};
+
+AgentTask toAgentTask(AgentdTask t) =>
+    AgentTask(id: t.id, title: t.title, status: mapTaskStatus(t.status), note: t.note, updatedAt: t.updatedAt);
+
+/// Answer of op board → HostBoard.
+HostBoard toHostBoard(AgentdBoard b, {required String hostId}) => HostBoard(
+  hostId: hostId,
+  unreadHuman: b.unreadHuman,
+  sessions: [
+    for (final s in b.sessions)
+      BoardSession(
+        hostId: hostId,
+        name: s.name,
+        status: mapStatus(s.status),
+        attention: s.attention,
+        turn: s.turn > 0 ? s.turn : null,
+        preview: s.preview,
+        tasks: [for (final t in s.tasks) toAgentTask(t)],
+        questions: [
+          for (final q in s.questions) AgentQuestion(id: q.id, body: q.body, options: q.options, taskId: q.task, createdAt: q.createdAt),
+        ],
+      ),
+  ],
+);
+
 /// Queue listing (op queue without name) → WorkQueue.
 WorkQueue toWorkQueue(AgentdQueueCount q) => WorkQueue(q.name, q.unclaimed);
 

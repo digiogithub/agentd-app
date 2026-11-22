@@ -223,3 +223,45 @@ Map<String, Object?> messageJson({int id = 5, String state = 'queued', String? q
   'created_at': '2026-11-15T09:00:00Z',
   'queue': ?queue,
 };
+
+Map<String, Object?> taskJson(String id, String title, {String status = 'pending', String? note}) => {
+  'id': id,
+  'title': title,
+  'status': status,
+  'note': ?note,
+  'updated_at': '2026-11-22T09:00:00Z',
+};
+
+/// Answer of op board: one session with a plan and an open question, one
+/// without tasks.
+Map<String, Object?> boardJson({String digest = 'b1', bool question = true}) => {
+  'sessions': [
+    {
+      'name': 'claude@webapp',
+      'status': 'working',
+      'attention': false,
+      'turn': 3,
+      'preview': 'Running the tests',
+      'tasks': [
+        taskJson('t1', 'Task model', status: 'done'),
+        taskJson('t2', 'Persist tasks', status: 'in_progress'),
+        taskJson('t3', 'Deploy', status: 'blocked', note: 'Missing credential'),
+        taskJson('t4', 'Docs'),
+        taskJson('t5', 'Old idea', status: 'cancelled'),
+      ],
+      'questions': [
+        if (question)
+          {
+            'id': 21,
+            'body': 'Schema v4 in this change?',
+            'options': ['Same change', 'Separate'],
+            'task': 't2',
+            'created_at': '2026-11-22T09:10:00Z',
+          },
+      ],
+    },
+    {'name': 'codex@api', 'status': 'idle', 'attention': true, 'turn': 1, 'preview': 'Done.', 'tasks': <Object?>[], 'questions': <Object?>[]},
+  ],
+  'unread_human': 2,
+  'digest': digest,
+};

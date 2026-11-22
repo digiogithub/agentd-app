@@ -15,17 +15,20 @@ class Fakes {
     : hosts = FakeHostsRepository(),
       sessions = FakeSessionsRepository(),
       mail = FakeMailRepository(),
+      board = FakeBoardRepository(),
       provision = FakeProvisionService(stepDelay: provisionDelay);
 
   final FakeHostsRepository hosts;
   final FakeSessionsRepository sessions;
   final FakeMailRepository mail;
+  final FakeBoardRepository board;
   final FakeProvisionService provision;
 
   List<Override> get overrides => [
     hostsRepositoryProvider.overrideWithValue(hosts),
     sessionsRepositoryProvider.overrideWithValue(sessions),
     mailRepositoryProvider.overrideWithValue(mail),
+    boardRepositoryProvider.overrideWithValue(board),
     provisionServiceProvider.overrideWithValue(provision),
   ];
 }

@@ -1,4 +1,4 @@
-// Bottom navigation of the four main screens (76px, as the mockups).
+// Bottom navigation of the five main screens (76px, as the mockups).
 
 import 'package:material_ui/material_ui.dart';
 
@@ -11,6 +11,7 @@ class NavItem {
 }
 
 const mainNavItems = [
+  NavItem('Panel', Icons.dashboard_outlined),
   NavItem('Agentes', Icons.sort),
   NavItem('Hosts', Icons.dns_outlined),
   NavItem('Buzón', Icons.inbox_outlined),

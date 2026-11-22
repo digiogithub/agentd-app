@@ -290,6 +290,18 @@ class AgentdClient {
   Future<AgentdQueueResult> queue({String? name, bool bodies = false, String? sinceDigest}) async =>
       AgentdQueueResult.fromJson(await _callMap('queue', compactArgs({'name': name, 'bodies': bodies, 'since_digest': sinceDigest})));
 
+  // ---- Work dashboard ----
+
+  /// Everything a dashboard paints for this host: every session with its
+  /// task list and the open questions it asked the caller. With
+  /// [sinceDigest] still current the answer is `notModified` + the digest.
+  /// Humans and relay devices only (a guest device gets no questions).
+  Future<AgentdBoard> board({String? sinceDigest}) async =>
+      AgentdBoard.fromJson(await _callMap('board', compactArgs({'since_digest': sinceDigest})));
+
+  /// The task list of session [name] (agents write it; humans only read).
+  Future<AgentdTasksResult> tasks(String name) async => AgentdTasksResult.fromJson(await _callMap('tasks', {'name': name}));
+
   // ---- Streams ----
 
   /// Opens a resilient event subscription (see [AgentdSubscription]).

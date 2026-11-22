@@ -128,6 +128,7 @@ class AgentdSessionInfo {
     this.labels = const {},
     this.programStatus,
     this.reported = false,
+    this.tasks,
   });
 
   factory AgentdSessionInfo.fromJson(Json j) => AgentdSessionInfo(
@@ -155,6 +156,7 @@ class AgentdSessionInfo {
     labels: _strMap(j['labels']),
     programStatus: j['program_status'] is Map ? AgentdProgramStatus.fromJson(_map(j['program_status'])) : null,
     reported: _bool(j['reported']),
+    tasks: j['tasks'] is Map ? AgentdTaskSummary.fromJson(_map(j['tasks'])) : null,
   );
 
   final String name;
@@ -188,6 +190,9 @@ class AgentdSessionInfo {
   final Map<String, String> labels;
   final AgentdProgramStatus? programStatus;
   final bool reported;
+
+  /// Summary of the session's task list (null until it reports one).
+  final AgentdTaskSummary? tasks;
 }
 
 class AgentdAttention {
@@ -359,6 +364,9 @@ class AgentdMessage {
     this.queue,
     this.claimedAt,
     this.warning,
+    this.kind = '',
+    this.options = const [],
+    this.task,
   });
   factory AgentdMessage.fromJson(Json j) => AgentdMessage(
     id: _int(j['id']),
@@ -376,6 +384,9 @@ class AgentdMessage {
     queue: _strOrNull(j['queue']),
     claimedAt: parseGoTime(j['claimed_at']),
     warning: _strOrNull(j['warning']),
+    kind: _str(j['kind']),
+    options: [for (final o in _list(j['options'])) _str(o)],
+    task: _strOrNull(j['task']),
   );
   final int id;
   final String sender;
@@ -394,6 +405,17 @@ class AgentdMessage {
   final String? queue;
   final DateTime? claimedAt;
   final String? warning;
+
+  /// '' | question (a session asking the human).
+  final String kind;
+
+  /// Answer options of a question (at most 8).
+  final List<String> options;
+
+  /// Task id of the sender the question is about.
+  final String? task;
+
+  bool get isQuestion => kind == 'question';
 }
 
 /// Answer of `inbox`.
@@ -430,6 +452,143 @@ class AgentdQueueResult {
   final List<AgentdMessage> items;
   final List<AgentdQueueCount> queues;
   final String? digest;
+  final bool notModified;
+}
+
+/// One item of a session's plan (`proto.Task`). Agent-written text.
+class AgentdTask {
+  const AgentdTask({required this.id, required this.title, this.status = 'pending', this.note, this.updatedAt});
+  factory AgentdTask.fromJson(Json j) => AgentdTask(
+    id: _str(j['id']),
+    title: _str(j['title']),
+    status: _strOrNull(j['status']) ?? 'pending',
+    note: _strOrNull(j['note']),
+    updatedAt: parseGoTime(j['updated_at']),
+  );
+  final String id;
+  final String title;
+
+  /// pending | in_progress | blocked | done | cancelled
+  final String status;
+  final String? note;
+  final DateTime? updatedAt;
+}
+
+/// Tasks per status (`proto.TaskCounts`).
+class AgentdTaskCounts {
+  const AgentdTaskCounts({this.pending = 0, this.inProgress = 0, this.blocked = 0, this.done = 0, this.cancelled = 0});
+  factory AgentdTaskCounts.fromJson(Json j) => AgentdTaskCounts(
+    pending: _int(j['pending']),
+    inProgress: _int(j['in_progress']),
+    blocked: _int(j['blocked']),
+    done: _int(j['done']),
+    cancelled: _int(j['cancelled']),
+  );
+  final int pending;
+  final int inProgress;
+  final int blocked;
+  final int done;
+  final int cancelled;
+}
+
+/// `SessionInfo.tasks`: revision, counts and the first in_progress title.
+class AgentdTaskSummary {
+  const AgentdTaskSummary({this.revision = 0, this.counts = const AgentdTaskCounts(), this.current});
+  factory AgentdTaskSummary.fromJson(Json j) => AgentdTaskSummary(
+    revision: _int(j['revision']),
+    counts: AgentdTaskCounts.fromJson(_map(j['counts'])),
+    current: _strOrNull(j['current']),
+  );
+  final int revision;
+  final AgentdTaskCounts counts;
+  final String? current;
+}
+
+/// Answer of `tasks` (and of the session-only `tasks_set` / `task_update`).
+class AgentdTasksResult {
+  const AgentdTasksResult({this.name, this.tasks = const [], this.revision = 0});
+  factory AgentdTasksResult.fromJson(Json j) => AgentdTasksResult(
+    name: _strOrNull(j['name']),
+    tasks: [for (final t in _list(j['tasks'])) AgentdTask.fromJson(_map(t))],
+    revision: _int(j['revision']),
+  );
+  final String? name;
+  final List<AgentdTask> tasks;
+  final int revision;
+}
+
+/// One task a revision added or changed (`proto.TaskChange`).
+class AgentdTaskChange {
+  const AgentdTaskChange({required this.id, this.title = '', this.status = '', this.from});
+  factory AgentdTaskChange.fromJson(Json j) =>
+      AgentdTaskChange(id: _str(j['id']), title: _str(j['title']), status: _str(j['status']), from: _strOrNull(j['from']));
+  final String id;
+  final String title;
+  final String status;
+
+  /// Previous status (null for a new task or an unchanged status).
+  final String? from;
+}
+
+/// A question a session asked the human and nobody answered (`proto.BoardQuestion`).
+class AgentdBoardQuestion {
+  const AgentdBoardQuestion({required this.id, this.body = '', this.options = const [], this.task, this.createdAt});
+  factory AgentdBoardQuestion.fromJson(Json j) => AgentdBoardQuestion(
+    id: _int(j['id']),
+    body: _str(j['body']),
+    options: [for (final o in _list(j['options'])) _str(o)],
+    task: _strOrNull(j['task']),
+    createdAt: parseGoTime(j['created_at']),
+  );
+  final int id;
+  final String body;
+  final List<String> options;
+  final String? task;
+  final DateTime? createdAt;
+}
+
+/// One session of the board (`proto.BoardSession`).
+class AgentdBoardSession {
+  const AgentdBoardSession({
+    required this.name,
+    this.status = '',
+    this.attention = false,
+    this.turn = 0,
+    this.preview,
+    this.tasks = const [],
+    this.questions = const [],
+  });
+  factory AgentdBoardSession.fromJson(Json j) => AgentdBoardSession(
+    name: _str(j['name']),
+    status: _str(j['status']),
+    attention: _bool(j['attention']),
+    turn: _int(j['turn']),
+    preview: _strOrNull(j['preview']),
+    tasks: [for (final t in _list(j['tasks'])) AgentdTask.fromJson(_map(t))],
+    questions: [for (final q in _list(j['questions'])) AgentdBoardQuestion.fromJson(_map(q))],
+  );
+  final String name;
+  final String status;
+  final bool attention;
+  final int turn;
+  final String? preview;
+  final List<AgentdTask> tasks;
+  final List<AgentdBoardQuestion> questions;
+}
+
+/// Answer of `board`. With `since_digest` still current: [notModified] and
+/// only the digest.
+class AgentdBoard {
+  const AgentdBoard({this.sessions = const [], this.unreadHuman = 0, this.digest = '', this.notModified = false});
+  factory AgentdBoard.fromJson(Json j) => AgentdBoard(
+    sessions: [for (final s in _list(j['sessions'])) AgentdBoardSession.fromJson(_map(s))],
+    unreadHuman: _int(j['unread_human']),
+    digest: _str(j['digest']),
+    notModified: _bool(j['not_modified']),
+  );
+  final List<AgentdBoardSession> sessions;
+  final int unreadHuman;
+  final String digest;
   final bool notModified;
 }
 

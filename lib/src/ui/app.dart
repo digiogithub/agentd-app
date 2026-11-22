@@ -1,4 +1,4 @@
-// App root and the bottom-nav shell (Agentes, Hosts, Buzón, Ajustes).
+// App root and the bottom-nav shell (Panel, Agentes, Hosts, Buzón, Ajustes).
 
 import 'dart:async';
 
@@ -14,6 +14,7 @@ import 'screens/session_screen.dart';
 import 'screens/agents_screen.dart';
 import 'screens/hosts_screen.dart';
 import 'screens/mailbox_screen.dart';
+import 'screens/panel_screen.dart';
 import 'screens/settings_screen.dart';
 import 'theme.dart';
 import 'widgets/bottom_nav.dart';
@@ -197,6 +198,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     body: IndexedStack(
       index: _index,
       children: const [
+        PanelScreen(),
         AgentsScreen(),
         HostsScreen(),
         MailboxScreen(),

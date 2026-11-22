@@ -6,6 +6,7 @@
 //     hostsRepositoryProvider.overrideWithValue(data.hosts),
 //     sessionsRepositoryProvider.overrideWithValue(data.sessions),
 //     mailRepositoryProvider.overrideWithValue(data.mail),
+//     boardRepositoryProvider.overrideWithValue(data.board),
 //     provisionServiceProvider.overrideWithValue(data.provision),
 //     hostKeyPromptsProvider.overrideWithValue(data.hostKeyPrompts),
 //   ], child: const AgentdApp())
@@ -22,6 +23,7 @@ import 'fakes/fake_repositories.dart';
 final hostsRepositoryProvider = Provider<HostsRepository>((ref) => FakeHostsRepository());
 final sessionsRepositoryProvider = Provider<SessionsRepository>((ref) => FakeSessionsRepository());
 final mailRepositoryProvider = Provider<MailRepository>((ref) => FakeMailRepository());
+final boardRepositoryProvider = Provider<BoardRepository>((ref) => FakeBoardRepository());
 final provisionServiceProvider = Provider<ProvisionService>((ref) => FakeProvisionService());
 
 /// New host keys waiting for the user's decision (TOFU dialog, see app.dart).
@@ -47,6 +49,9 @@ final projectsProvider = FutureProvider.autoDispose.family<List<String>, String>
 final inboxProvider = StreamProvider.family<List<MailMessage>, String>((ref, hostId) => ref.watch(mailRepositoryProvider).inbox(hostId));
 
 final queuesProvider = StreamProvider.family<List<WorkQueue>, String>((ref, hostId) => ref.watch(mailRepositoryProvider).queues(hostId));
+
+/// The work dashboard of one host (tasks and open questions of its agents).
+final boardProvider = StreamProvider.family<HostBoard, String>((ref, hostId) => ref.watch(boardRepositoryProvider).watch(hostId));
 
 /// Host name by id ('' when unknown), for subtitles.
 /// The saved config of a host (null while unknown). Relay hosts carry their

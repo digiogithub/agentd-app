@@ -27,6 +27,7 @@ abstract final class EventKind {
   static const docChanged = 'doc.changed';
   static const statusReported = 'status.reported';
   static const turnCompleted = 'turn.completed';
+  static const taskChanged = 'task.changed';
   static const resync = 'resync';
   static const heartbeat = 'heartbeat';
   static const bye = 'bye';
@@ -121,11 +122,24 @@ sealed class AgentdEvent {
           to: jsonStr(d['to']),
           queue: jsonStrOrNull(d['queue']),
           by: jsonStrOrNull(d['by']),
+          mailKind: jsonStr(d['kind']),
         );
       case EventKind.sessionLabels:
         return SessionLabelsEvent(seq: seq, epoch: epoch, time: time, session: session, data: data, labels: jsonStrMap(d['labels']));
       case EventKind.turnCompleted:
         return TurnCompletedEvent(seq: seq, epoch: epoch, time: time, session: session, data: data, turn: AgentdTurn.fromJson(d));
+      case EventKind.taskChanged:
+        return TaskChangedEvent(
+          seq: seq,
+          epoch: epoch,
+          time: time,
+          session: session,
+          data: data,
+          revision: jsonInt(d['revision']),
+          counts: AgentdTaskCounts.fromJson(jsonMap(d['counts'])),
+          current: jsonStrOrNull(d['current']),
+          changed: [for (final c in d['changed'] is List ? d['changed'] as List : const []) AgentdTaskChange.fromJson(jsonMap(c))],
+        );
       case EventKind.resync:
         return ResyncEvent(epoch: epoch, time: time, data: data, reason: jsonStr(d['reason']));
       case EventKind.heartbeat:
@@ -224,12 +238,17 @@ class MailEvent extends AgentdEvent {
     required this.to,
     this.queue,
     this.by,
+    this.mailKind = '',
   });
   final int id;
   final String from;
   final String to;
   final String? queue;
   final String? by;
+
+  /// Message kind ('' | question). A question to a human has no [session]:
+  /// its sender is [from].
+  final String mailKind;
 }
 
 class SessionLabelsEvent extends AgentdEvent {
@@ -242,6 +261,29 @@ class TurnCompletedEvent extends AgentdEvent {
   const TurnCompletedEvent({super.seq, super.epoch, super.time, super.session, super.data, required this.turn})
     : super(kind: EventKind.turnCompleted);
   final AgentdTurn turn;
+}
+
+/// A session's task list changed ([session] = its owner).
+class TaskChangedEvent extends AgentdEvent {
+  const TaskChangedEvent({
+    super.seq,
+    super.epoch,
+    super.time,
+    super.session,
+    super.data,
+    required this.revision,
+    this.counts = const AgentdTaskCounts(),
+    this.current,
+    this.changed = const [],
+  }) : super(kind: EventKind.taskChanged);
+  final int revision;
+  final AgentdTaskCounts counts;
+
+  /// Title of the first in_progress task.
+  final String? current;
+
+  /// New and modified tasks (removed ones are not listed).
+  final List<AgentdTaskChange> changed;
 }
 
 /// Events were lost (reason overflow | since_seq_too_old | epoch_mismatch):

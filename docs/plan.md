@@ -44,8 +44,8 @@ Cross-layer API: `core/contracts.dart` only.
 | `agentd/` | P1-B | wire codec, `AgentdClient` (ops), event subscription, attach frames, model mapping to contracts |
 | `mux/` | P1-C | zellij and tmux adapters over `RemoteShell` |
 | `provision/` | P1-C | `ProvisionService` implementation, detect script + parser |
-| `ui/` | P1-D | theme, 9 screens, widgets, fakes (`ui/fakes/`) |
-| `data/` | P2 | real repositories wiring transport + agentd + mux + provision (`AppData.create`) |
+| `ui/` | P1-D | theme, screens, widgets, fakes (`ui/fakes/`) |
+| `data/` | P2 | real repositories wiring transport + agentd + mux + provision (`AppData.create`), the board repository |
 
 ## Phases
 
@@ -80,6 +80,8 @@ Cross-layer API: `core/contracts.dart` only.
   dialogs, so the app derives permission / plan / question from the dialog text and labels
   (Claude Code tool headers, Codex `$ cmd` lines, "don't ask again", "keep planning"); an OSC 7501
   `program_status.kind` wins when the session reports one.
+
+- [x] Panel (agentd AGED-US-0046, epic AGED-EP-0007): work dashboard tab. See "Panel" below.
 
 ## Rules
 
@@ -158,3 +160,38 @@ Protocol v1 and design live in agentd: `docs/plans/agentd/relay_plan.md` (normat
   + daemon (done on 2026-11-19 against the Go `agentd-relay` and daemon from the agentd working
   tree: pair, ping, run, ls, attach observe, kill, rm all passed).
 - Not done: QR scanning of the invite (paste or open the link).
+
+## Panel (work dashboard)
+
+Mobile side of the agentd work dashboard (agentd `docs/plans/agentd/dashboard_plan.md`, normative
+contract; story AGED-US-0046, 2026-11-22). Design: canvas
+https://claude.ai/artifact/187awNfuofy4KQZ2zYBLSG (Panel, answer sheet, agent tasks).
+
+- **Wire** (`agentd/`): ops `board {since_digest?}` and `tasks {name}`; `Message.kind / options /
+  task`; event `task.changed` (`TaskChangedEvent`); `mail.*` events carry `kind`;
+  `SessionInfo.tasks` summary. `reply` already existed. The app never sends `tasks_set` /
+  `task_update` (session-only ops) and never sends `kind: "question"`.
+- **Contracts**: `AgentTask`, `AgentQuestion`, `BoardSession`, `HostBoard`, `BoardRepository`
+  (`watch(hostId)`, `answer(hostId, questionId, body)`).
+- **Data** (`data/board_repository.dart`): one `board` call per host, then its own `subscribe`
+  with `kinds: [session, status, attention, mail, task]`; every such event schedules a debounced
+  (250 ms) `board` with `since_digest` (`not_modified` emits nothing). The subscription opens only
+  after a first successful board, so a daemon without the op (0.7.1 and older) is never sent the
+  `task` kind: its board is `available: false` and asked again every 20 s. Nothing runs while
+  nobody listens.
+- **Terminal menus** are not in the board: the Panel joins `AgentSession.pending` of the sessions
+  repository (classified view, revision + epoch) with the board by host + name.
+- **UI**: `ui/panel_model.dart` (pure: waiting items, counters, agent order), `screens/
+  panel_screen.dart`, `screens/panel_sheets.dart` (question sheet, menu sheet),
+  `screens/panel_agent_screen.dart`, `widgets/panel_widgets.dart`. The bottom nav has five tabs:
+  Panel, Agentes, Hosts, Buzón, Ajustes (the mockup drew four; Ajustes stays reachable).
+- **Destinations**: Buzón = `reply` for a question, `send` to the session for a free message;
+  Prompt = `act prompt` (forced while the agent works, as in the chat). A prompt does not close
+  the question: only a reply does.
+- **Relay**: `board` and `tasks` are allowed to every scope; `canOperate` hides the answer
+  controls for `view` devices; guests get no questions from the daemon.
+- **Fakes**: `sampleBoards` puts the mockup's plans on the sample sessions
+  (`FakeBoardRepository`). Tests: `test/agentd/board_test.dart`,
+  `test/data/board_repository_test.dart` (fake daemon), `test/ui/panel_screen_test.dart`.
+- Not done: push notifications (AGED-US-0047 / 0048, through agentd-relay), the unread mail
+  count of the board (`HostBoard.unreadHuman` is carried but not drawn).

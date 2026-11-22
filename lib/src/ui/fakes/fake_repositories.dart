@@ -437,6 +437,55 @@ class FakeMailRepository implements MailRepository {
   }
 }
 
+class FakeBoardRepository implements BoardRepository {
+  FakeBoardRepository({Map<String, HostBoard>? boards, DateTime? now}) : _boards = {...(boards ?? sampleBoards(now ?? DateTime.now()))};
+
+  final Map<String, HostBoard> _boards;
+  final _changes = StreamController<void>.broadcast();
+
+  /// Recorded answers: `session` is the question id, `arg` the body.
+  final List<FakeCall> calls = [];
+
+  /// When set, [answer] fails with this error.
+  Object? answerError;
+
+  /// Replaces the board of a host (tests).
+  void set(HostBoard board) {
+    _boards[board.hostId] = board;
+    _changes.add(null);
+  }
+
+  @override
+  Stream<HostBoard> watch(String hostId) => _replay(() => _boards[hostId] ?? HostBoard(hostId: hostId, available: false), _changes.stream);
+
+  @override
+  Future<void> answer(String hostId, int questionId, String body) async {
+    calls.add(FakeCall('answer', '$questionId', arg: body));
+    if (answerError != null) throw answerError!;
+    final b = _boards[hostId];
+    if (b == null) return;
+    // Like the daemon: a reply closes the question.
+    _boards[hostId] = HostBoard(
+      hostId: hostId,
+      unreadHuman: b.unreadHuman,
+      sessions: [
+        for (final s in b.sessions)
+          BoardSession(
+            hostId: s.hostId,
+            name: s.name,
+            status: s.status,
+            attention: s.attention,
+            turn: s.turn,
+            preview: s.preview,
+            tasks: s.tasks,
+            questions: [for (final q in s.questions) if (q.id != questionId) q],
+          ),
+      ],
+    );
+    _changes.add(null);
+  }
+}
+
 class FakeProvisionService implements ProvisionService {
   FakeProvisionService({this.stepDelay = const Duration(milliseconds: 250), this.failAt});
 
