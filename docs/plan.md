@@ -176,7 +176,7 @@ https://claude.ai/artifact/187awNfuofy4KQZ2zYBLSG (Panel, answer sheet, agent ta
 - **Data** (`data/board_repository.dart`): one `board` call per host, then its own `subscribe`
   with `kinds: [session, status, attention, mail, task]`; every such event schedules a debounced
   (250 ms) `board` with `since_digest` (`not_modified` emits nothing). The subscription opens only
-  after a first successful board, so a daemon without the op (0.7.1 and older) is never sent the
+  after a first successful board, so a daemon without the op (before 0.8.0) is never sent the
   `task` kind: its board is `available: false` and asked again every 20 s. Nothing runs while
   nobody listens.
 - **Terminal menus** are not in the board: the Panel joins `AgentSession.pending` of the sessions

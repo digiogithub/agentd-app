@@ -32,7 +32,7 @@ and fake remote shells.
 ## Panel (work dashboard)
 
 The first tab. It shows, across every connected host whose agentd has the
-work dashboard (op `board`, in the release after 0.7.1):
+work dashboard (op `board`, agentd 0.8.0 or later):
 
 - **Te esperan**: what needs you. Questions agents asked with `agentd ask` (mailbox messages of
   kind `question`), menus on an agent's terminal (permissions, questions, plans) and tasks an
