@@ -26,12 +26,15 @@ Stream<T> _replay<T>(T Function() current, Stream<void> changes) {
 
 /// One recorded repository call.
 class FakeCall {
-  const FakeCall(this.method, this.session, {this.arg, this.revision, this.epoch});
+  const FakeCall(this.method, this.session, {this.arg, this.revision, this.epoch, this.notify});
   final String method;
   final String session;
   final Object? arg;
   final int? revision;
   final String? epoch;
+
+  /// `notify` of a board answer (null for other calls).
+  final bool? notify;
 
   @override
   String toString() => 'FakeCall($method, $session, $arg, $revision, $epoch)';
@@ -459,8 +462,8 @@ class FakeBoardRepository implements BoardRepository {
   Stream<HostBoard> watch(String hostId) => _replay(() => _boards[hostId] ?? HostBoard(hostId: hostId, available: false), _changes.stream);
 
   @override
-  Future<void> answer(String hostId, int questionId, String body) async {
-    calls.add(FakeCall('answer', '$questionId', arg: body));
+  Future<void> answer(String hostId, int questionId, String body, {bool notify = true}) async {
+    calls.add(FakeCall('answer', '$questionId', arg: body, notify: notify));
     if (answerError != null) throw answerError!;
     final b = _boards[hostId];
     if (b == null) return;

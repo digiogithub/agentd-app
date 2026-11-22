@@ -167,12 +167,12 @@ Mobile side of the agentd work dashboard (agentd `docs/plans/agentd/dashboard_pl
 contract; story AGED-US-0046, 2026-11-22). Design: canvas
 https://claude.ai/artifact/187awNfuofy4KQZ2zYBLSG (Panel, answer sheet, agent tasks).
 
-- **Wire** (`agentd/`): ops `board {since_digest?}` and `tasks {name}`; `Message.kind / options /
-  task`; event `task.changed` (`TaskChangedEvent`); `mail.*` events carry `kind`;
+- **Wire** (`agentd/`): ops `board {since_digest?}` and `tasks {name}`; `reply {notify?}`;
+  `Message.kind / options / task`; event `task.changed` (`TaskChangedEvent`); `mail.*` events carry `kind`;
   `SessionInfo.tasks` summary. `reply` already existed. The app never sends `tasks_set` /
   `task_update` (session-only ops) and never sends `kind: "question"`.
 - **Contracts**: `AgentTask`, `AgentQuestion`, `BoardSession`, `HostBoard`, `BoardRepository`
-  (`watch(hostId)`, `answer(hostId, questionId, body)`).
+  (`watch(hostId)`, `answer(hostId, questionId, body, {notify})`).
 - **Data** (`data/board_repository.dart`): one `board` call per host, then its own `subscribe`
   with `kinds: [session, status, attention, mail, task]`; every such event schedules a debounced
   (250 ms) `board` with `since_digest` (`not_modified` emits nothing). The subscription opens only
@@ -186,8 +186,11 @@ https://claude.ai/artifact/187awNfuofy4KQZ2zYBLSG (Panel, answer sheet, agent ta
   `screens/panel_agent_screen.dart`, `widgets/panel_widgets.dart`. The bottom nav has five tabs:
   Panel, Agentes, Hosts, Buzón, Ajustes (the mockup drew four; Ajustes stays reachable).
 - **Destinations**: Buzón = `reply` for a question, `send` to the session for a free message;
-  Prompt = `act prompt` (forced while the agent works, as in the chat). A prompt does not close
-  the question: only a reply does.
+  Prompt = `act prompt` (forced while the agent works, as in the chat). Question options always
+  answer by `reply`; the Buzón / Prompt toggle is for free text. A question answered through the
+  prompt is then closed with `reply {notify: false}` (agentd AGED-US-0049: stored as delivered,
+  never injected); if that reply fails (a daemon without `notify`) the prompt result is kept and
+  a toast says the question is still open.
 - **Relay**: `board` and `tasks` are allowed to every scope; `canOperate` hides the answer
   controls for `view` devices; guests get no questions from the daemon.
 - **Fakes**: `sampleBoards` puts the mockup's plans on the sample sessions

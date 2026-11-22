@@ -698,7 +698,9 @@ abstract class BoardRepository {
   Stream<HostBoard> watch(String hostId);
 
   /// Answers question [questionId] (a mailbox reply; it closes the question).
-  Future<void> answer(String hostId, int questionId, String body);
+  /// With [notify] false the reply is only recorded, not delivered to the
+  /// agent: for an answer already typed in its prompt.
+  Future<void> answer(String hostId, int questionId, String body, {bool notify = true});
 }
 
 enum ProvisionStep { download, verify, install, service, hcListener, mcp, cli }

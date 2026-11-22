@@ -71,6 +71,9 @@ void main() {
     final m = await c.reply(21, 'Same change');
     expect(d.lastArgs('reply'), {'id': 21, 'body': 'Same change'});
     expect((m.replyTo, m.isQuestion), (21, false));
+    // A quiet reply only records the answer (already typed in the prompt).
+    await c.reply(21, 'Same change', notify: false);
+    expect(d.lastArgs('reply'), {'id': 21, 'body': 'Same change', 'notify': false});
 
     final q = AgentdMessage.fromJson({...messageJson(id: 21), 'kind': 'question', 'options': ['A', 'B'], 'task': 't2'});
     expect((q.isQuestion, q.task), (true, 't2'));

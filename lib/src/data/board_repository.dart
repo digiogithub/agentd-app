@@ -39,10 +39,10 @@ class LiveBoardRepository implements BoardRepository {
   Stream<HostBoard> watch(String hostId) => _board(hostId).stream();
 
   @override
-  Future<void> answer(String hostId, int questionId, String body) async {
+  Future<void> answer(String hostId, int questionId, String body, {bool notify = true}) async {
     final c = await _clients.forHost(hostId);
     if (c == null) throw StateError('host $hostId has no reachable agentd');
-    await c.reply(questionId, body);
+    await c.reply(questionId, body, notify: notify);
     _boards[hostId]?.refresh();
   }
 

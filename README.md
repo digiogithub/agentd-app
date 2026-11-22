@@ -44,10 +44,11 @@ work dashboard (op `board`, in the release after 0.7.1):
 
 Answering without opening the session:
 
-- A question opens a sheet: pick one of its options or write your own answer, then choose where
-  it goes. **Buzón** replies to the question (it closes it; the agent gets the reply when it is
-  free). **Prompt** types the text in the agent's terminal now, even while it works; the question
-  stays open in the mailbox.
+- A question opens a sheet. Tapping one of its options answers it through the mailbox. Your own
+  text goes where you choose: **Buzón** replies to the question (the agent gets the reply when
+  it is free); **Prompt** types the text in the agent's terminal now, even while it works, and
+  then records it as a quiet reply (`reply` with `notify: false`), so the question closes
+  without the text being typed twice.
 - A permission menu has **Sí** / **No**; other menus list their options in a sheet. Both use
   `act choose` with the menu's revision and epoch, so a screen that changed is refused.
 - A card opens the agent's task view: tasks grouped as en curso / bloqueadas / pendientes /

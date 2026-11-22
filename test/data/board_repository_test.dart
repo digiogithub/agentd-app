@@ -106,6 +106,9 @@ void main() {
     expect(d.lastArgs('reply'), {'id': 21, 'body': 'Same change'});
     await eventually(() => out.length == 2);
     expect(out.last.sessions.first.questions, isEmpty);
+
+    await repo.answer('h', 21, 'Same change', notify: false);
+    expect(d.lastArgs('reply'), {'id': 21, 'body': 'Same change', 'notify': false});
   });
 
   test('a daemon without the board is unavailable, and asked again later', () async {

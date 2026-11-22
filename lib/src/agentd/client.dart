@@ -283,7 +283,11 @@ class AgentdClient {
   Future<AgentdMessage> read(int id, {String? as}) async =>
       AgentdMessage.fromJson(await _callMap('read', compactArgs({'as': as, 'id': id}, keep: {'id'})));
 
-  Future<AgentdMessage> reply(int id, String body) async => AgentdMessage.fromJson(await _callMap('reply', {'id': id, 'body': body}));
+  /// Replies to message [id] (a reply closes a question). With [notify]
+  /// false the reply is stored as delivered and never typed into the
+  /// session: for an answer the agent already got another way (its prompt).
+  Future<AgentdMessage> reply(int id, String body, {bool notify = true}) async =>
+      AgentdMessage.fromJson(await _callMap('reply', {'id': id, 'body': body, if (!notify) 'notify': false}));
 
   /// Without [name]: every non-empty queue. With [name]: its unclaimed items
   /// (bodies only with [bodies]).

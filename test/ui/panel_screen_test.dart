@@ -97,21 +97,22 @@ void main() {
     expect(find.text('Listo'), findsOneWidget);
   });
 
-  testWidgets('answers a question from the sheet: option to the mailbox', (tester) async {
+  testWidgets('an option answers the question through the mailbox', (tester) async {
     final f = await pumpUi(tester, _panel, height: 1500);
     await _tap(tester, find.text('Responder').first);
     expect(find.text('Bloquea la tarea «Persistir tareas en SQLite»'), findsOneWidget);
     expect(find.textContaining('Si va junto, el cambio toca también la purga'), findsOneWidget);
     expect(find.text('estudio · trabajando · hace 4 min'), findsOneWidget);
 
-    // Nothing chosen: nothing to send.
+    // No text: nothing to send.
     await _tap(tester, find.byKey(const ValueKey('answer-send')));
     expect(f.board.calls, isEmpty);
 
+    // Options ignore the Buzón / Prompt toggle: always a reply.
+    await _tap(tester, find.byKey(const ValueKey('target-prompt')));
     await _tap(tester, find.text('Cambio aparte'));
-    await _tap(tester, find.byKey(const ValueKey('answer-send')));
     final call = f.board.calls.single;
-    expect((call.method, call.session, call.arg), ('answer', '310', 'Cambio aparte'));
+    expect((call.method, call.session, call.arg, call.notify), ('answer', '310', 'Cambio aparte', true));
     expect(f.sessions.calls, isEmpty);
     // The sheet closed and the question left the Panel.
     expect(find.byKey(const ValueKey('answer-send')), findsNothing);
@@ -119,17 +120,56 @@ void main() {
     expect(_counter('Te esperan', 3), findsOneWidget);
   });
 
-  testWidgets('free text wins over the option; Prompt types in the terminal', (tester) async {
+  testWidgets('free text to the mailbox is a reply', (tester) async {
     final f = await pumpUi(tester, _panel, height: 1500);
     await _tap(tester, find.text('Responder').first);
-    await _tap(tester, find.text('En este cambio'));
     await tester.enterText(find.byKey(const ValueKey('answer-text')), '  Sepáralo, pero hoy  ');
+    await tester.pump();
+    await _tap(tester, find.byKey(const ValueKey('answer-send')));
+    expect((f.board.calls.single.arg, f.board.calls.single.notify), ('Sepáralo, pero hoy', true));
+    expect(f.sessions.calls, isEmpty);
+  });
+
+  testWidgets('free text to the prompt types it, then closes the question with a quiet reply', (tester) async {
+    final f = await pumpUi(tester, _panel, height: 1500);
+    await _tap(tester, find.text('Responder').first);
+    await tester.enterText(find.byKey(const ValueKey('answer-text')), 'Sepáralo');
     await tester.pump();
     await _tap(tester, find.byKey(const ValueKey('target-prompt')));
     await _tap(tester, find.byKey(const ValueKey('answer-send')));
     final call = f.sessions.calls.single;
-    expect((call.method, call.session, call.arg), ('prompt', 'pando@agentd', 'Sepáralo, pero hoy'));
-    expect(f.board.calls, isEmpty, reason: 'a prompt is not a mailbox reply');
+    expect((call.method, call.session, call.arg), ('prompt', 'pando@agentd', 'Sepáralo'));
+    final reply = f.board.calls.single;
+    expect((reply.session, reply.arg, reply.notify), ('310', 'Sepáralo', false), reason: 'recorded, not injected again');
+    expect(find.byKey(const ValueKey('answer-send')), findsNothing);
+    expect(_counter('Te esperan', 3), findsOneWidget);
+  });
+
+  testWidgets('a prompt that worked is kept when the quiet reply fails', (tester) async {
+    final f = await pumpUi(tester, _panel, height: 1500);
+    f.board.answerError = StateError('old daemon');
+    await _tap(tester, find.text('Responder').first);
+    await tester.enterText(find.byKey(const ValueKey('answer-text')), 'Sepáralo');
+    await tester.pump();
+    await _tap(tester, find.byKey(const ValueKey('target-prompt')));
+    await _tap(tester, find.byKey(const ValueKey('answer-send')));
+    expect(f.sessions.calls.single.method, 'prompt');
+    expect(find.text('Escrito en el prompt, pero la pregunta sigue abierta en el buzón'), findsOneWidget);
+    expect(find.byKey(const ValueKey('answer-send')), findsNothing, reason: 'the sheet closed');
+  });
+
+  testWidgets('a failed prompt sends no reply and keeps the sheet open', (tester) async {
+    final f = await pumpUi(tester, _panel, height: 1500);
+    f.sessions.promptError = StateError('busy');
+    f.board.answerError = StateError('offline');
+    await _tap(tester, find.text('Responder').first);
+    await tester.enterText(find.byKey(const ValueKey('answer-text')), 'Sepáralo');
+    await tester.pump();
+    await _tap(tester, find.byKey(const ValueKey('target-prompt')));
+    await _tap(tester, find.byKey(const ValueKey('answer-send')));
+    expect(find.text('No se pudo escribir en el prompt'), findsOneWidget);
+    expect(f.board.calls, isEmpty);
+    expect(find.byKey(const ValueKey('answer-send')), findsOneWidget);
   });
 
   testWidgets('a failed answer keeps the sheet open', (tester) async {
@@ -137,7 +177,6 @@ void main() {
     f.board.answerError = StateError('offline');
     await _tap(tester, find.text('Responder').first);
     await _tap(tester, find.text('Cambio aparte'));
-    await _tap(tester, find.byKey(const ValueKey('answer-send')));
     expect(find.text('No se pudo enviar la respuesta'), findsOneWidget);
     expect(find.byKey(const ValueKey('answer-send')), findsOneWidget);
   });
@@ -235,7 +274,6 @@ void main() {
     final f = await pumpUi(tester, const PanelAgentScreen(hostId: 'estudio', name: 'pando@agentd'), height: 1500);
     await _tap(tester, find.byKey(const ValueKey('agent-question-310')));
     await _tap(tester, find.text('En este cambio'));
-    await _tap(tester, find.byKey(const ValueKey('answer-send')));
     expect(f.board.calls.single.arg, 'En este cambio');
     expect(find.text('TE PREGUNTA'), findsNothing);
   });

@@ -78,7 +78,6 @@ class QuestionSheet extends ConsumerStatefulWidget {
 
 class _QuestionSheetState extends ConsumerState<QuestionSheet> {
   final _text = TextEditingController();
-  int? _selected;
   SendTarget _target = SendTarget.mailbox;
   bool _sending = false;
 
@@ -88,32 +87,39 @@ class _QuestionSheetState extends ConsumerState<QuestionSheet> {
     super.dispose();
   }
 
-  String get _answer {
-    final typed = _text.text.trim();
-    if (typed.isNotEmpty) return typed;
-    final i = _selected;
-    return i == null ? '' : widget.question.options[i];
-  }
-
-  Future<void> _send(AgentSession? live) async {
-    final body = _answer;
+  /// Sends [body]: a mailbox reply, or (free text only) the agent's prompt.
+  /// A prompted answer is then recorded with a quiet reply, which closes the
+  /// question without typing the text a second time.
+  Future<void> _send(String body, SendTarget target, AgentSession? live) async {
     if (body.isEmpty || _sending) return;
+    final board = ref.read(boardRepositoryProvider);
+    final s = widget.session;
     setState(() => _sending = true);
     try {
-      if (_target == SendTarget.prompt) {
+      if (target == SendTarget.prompt) {
         if (live == null) throw StateError('session gone');
         await ref.read(sessionsRepositoryProvider).prompt(live, body);
       } else {
-        await ref.read(boardRepositoryProvider).answer(widget.session.hostId, widget.question.id, body);
+        await board.answer(s.hostId, widget.question.id, body);
       }
-      if (!mounted) return;
-      showToast(context, _target == SendTarget.prompt ? 'Escrito en el prompt de ${widget.session.name}' : 'Respuesta enviada a ${widget.session.name}');
-      Navigator.of(context).pop(PanelSheetResult.sent);
     } catch (_) {
       if (!mounted) return;
       setState(() => _sending = false);
-      showToast(context, _target == SendTarget.prompt ? 'No se pudo escribir en el prompt' : 'No se pudo enviar la respuesta');
+      showToast(context, target == SendTarget.prompt ? 'No se pudo escribir en el prompt' : 'No se pudo enviar la respuesta');
+      return;
     }
+    var note = target == SendTarget.prompt ? 'Escrito en el prompt de ${s.name}' : 'Respuesta enviada a ${s.name}';
+    if (target == SendTarget.prompt) {
+      try {
+        await board.answer(s.hostId, widget.question.id, body, notify: false);
+      } catch (_) {
+        // The agent has the answer: only the record failed.
+        note = 'Escrito en el prompt, pero la pregunta sigue abierta en el buzón';
+      }
+    }
+    if (!mounted) return;
+    showToast(context, note);
+    Navigator.of(context).pop(PanelSheetResult.sent);
   }
 
   @override
@@ -153,20 +159,15 @@ class _QuestionSheetState extends ConsumerState<QuestionSheet> {
                   const SizedBox(height: 14),
                   for (final (i, o) in q.options.indexed) ...[
                     if (i > 0) const SizedBox(height: 8),
-                    Semantics(
-                      selected: _selected == i,
-                      child: AppButton(
-                        key: ValueKey('answer-option-$i'),
-                        label: o,
-                        style: _selected == i ? AppButtonStyle.waiting : AppButtonStyle.outline,
-                        height: 48,
-                        fontSize: 15,
-                        expand: true,
-                        onPressed: () => setState(() {
-                          _selected = _selected == i ? null : i;
-                          if (_selected != null) _text.clear();
-                        }),
-                      ),
+                    // An option always answers through the mailbox.
+                    AppButton(
+                      key: ValueKey('answer-option-$i'),
+                      label: o,
+                      style: i == 0 ? AppButtonStyle.waiting : AppButtonStyle.outline,
+                      height: 48,
+                      fontSize: 15,
+                      expand: true,
+                      onPressed: _sending ? null : () => _send(o, SendTarget.mailbox, live),
                     ),
                   ],
                 ],
@@ -179,19 +180,17 @@ class _QuestionSheetState extends ConsumerState<QuestionSheet> {
                   minLines: 2,
                   maxLines: 5,
                   textInputAction: TextInputAction.newline,
-                  onChanged: (v) => setState(() {
-                    if (v.trim().isNotEmpty) _selected = null;
-                  }),
+                  onChanged: (_) => setState(() {}),
                   style: AppFonts.inter(size: 14),
                   decoration: AppTextField.decoration(hint: 'Escribe una respuesta…').copyWith(fillColor: AppColors.bg),
                 ),
                 const SizedBox(height: 14),
-                Text('Enviar a', style: AppText.caption),
+                Text('Enviar tu texto a', style: AppText.caption),
                 const SizedBox(height: 6),
                 SendTargetControl(value: _target, promptEnabled: live != null, onChanged: (t) => setState(() => _target = t)),
                 const SizedBox(height: 6),
                 Text(
-                  'Buzón: le llega como respuesta a su pregunta cuando quede libre. Prompt: se escribe ahora en su terminal y la pregunta sigue abierta.',
+                  'Buzón: le llega como respuesta a su pregunta cuando quede libre. Prompt: se escribe ahora en su terminal y la pregunta se cierra.',
                   style: AppText.caption.copyWith(height: 1.45),
                 ),
               ],
@@ -216,7 +215,7 @@ class _QuestionSheetState extends ConsumerState<QuestionSheet> {
                         height: 48,
                         fontSize: 15,
                         expand: true,
-                        onPressed: _answer.isEmpty || _sending ? null : () => _send(live),
+                        onPressed: _text.text.trim().isEmpty || _sending ? null : () => _send(_text.text.trim(), _target, live),
                       ),
                     ),
                   ],
