@@ -1,0 +1,60 @@
+# agentd-app: guide for agents
+
+Mobile Flutter client (Android and iOS only) for coding agents: work dashboard (Panel), sessions
+inbox, chat view, terminal, approvals, agentd mailbox and host provisioning, over SSH or
+agentd-relay. Humans: see `README.md`. Architecture and decisions: `docs/plan.md`.
+
+## Layout
+
+| Path | Content |
+|---|---|
+| `lib/main.dart` | entry point, real wiring or fakes (`AGENTD_APP_FAKE`) |
+| `lib/src/core/contracts.dart` | the only cross-layer API: models and repository interfaces |
+| `lib/src/transport/` | SSH (`RemoteShell`), key and host key stores, connection pool |
+| `lib/src/relay/` | agentd-relay client: Noise, stream mux, WebSocket, pairing |
+| `lib/src/agentd/` | daemon wire protocol: `AgentdClient` (ops), events, attach, mapping to contracts |
+| `lib/src/mux/` | zellij and tmux adapters |
+| `lib/src/provision/` | host detection and installs |
+| `lib/src/data/` | real repositories (`AppData.create`): hosts, sessions, mail, board |
+| `lib/src/ui/` | theme, providers, screens, widgets, `fakes/` (sample data of the mockups) |
+| `test/` | mirrors `lib/src/`; `test/agentd/fake_daemon.dart` is the fake daemon |
+| `docs/` | `plan.md` (architecture, per-feature notes), `signing.md` |
+
+## Commands
+
+```sh
+export PATH=/apps/flutter/bin:$PATH
+flutter analyze
+flutter test
+flutter run --dart-define=AGENTD_APP_FAKE=true   # in-memory sample data
+flutter build apk --debug
+```
+
+On machines with Sluice, run the checks through its `verify` tool instead of the shell.
+
+## Conventions
+
+- English for code, comments, identifiers, docs and commits. UI copy in Spanish.
+- Conventional commits; a `feat` bumps `version` in `pubspec.yaml`.
+- Layers talk only through `core/contracts.dart`. New data for the UI = a contract type + a
+  repository method, a real implementation in `data/`, a fake in `ui/fakes/` and a provider in
+  `ui/providers.dart` (overridden in `lib/main.dart` and `test/ui/helpers.dart`).
+- Wire models mirror agentd `internal/proto` field names; args sent are exactly the daemon's
+  names (it rejects unknown fields). The protocol contract lives in the agentd repository
+  (`AGENTS.md`, `docs/plans/`).
+- The UI hides what a relay scope forbids (`HostConfig.canOperate`, `canAdmin`, `hasShell`);
+  the daemon enforces it.
+- Colors and fonts come from `ui/theme.dart` (`AppColors`, `AppFonts`, `AppText`); shared widgets
+  from `ui/widgets/common.dart`. Touch targets are at least 44 px.
+- Every feature has tests: wire against `FakeDaemon`, repositories against `StubHosts` +
+  `DataShell`, screens with `pumpUi` on the fakes.
+- Update `README.md` and `docs/plan.md` in the same change.
+
+## Do not
+
+- Run real agent CLIs (claude, codex, pando...) or installers in tests.
+- Log keys, passwords, invite codes or prompt text.
+- Add desktop targets (the desktop client is a separate program in the agentd repository).
+- Edit the agentd repository from here: ask its agent for daemon changes.
+- Add push / Firebase dependencies before the relay push stories (AGED-US-0047 / 0048).
+- Let the app write agent tasks: only agents do (`tasks_set` / `task_update` are session-only).
