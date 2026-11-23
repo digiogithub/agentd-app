@@ -238,45 +238,121 @@ final RegExp _userLine = RegExp(r'^\s{0,2}[❯›>][  ](.*)$');
 // Agent / tool bullets: claude `⏺`, codex `•`, generic `●`.
 final RegExp _bulletLine = RegExp(r'^\s{0,2}[⏺•●][  ](.*)$');
 
-// A tool call after the bullet: `Bash(ls -la)`, `Read(file)`, `Ran ls`.
-final RegExp _toolCall = RegExp(r'^([A-Z][A-Za-z0-9_.:-]{1,40})\((.*)\)\s*$');
+// A tool call after the bullet: `Bash(ls -la)`, `Read(file)`, `Ran ls`. The
+// fallback for lines without chat markup; the call may go on in more lines,
+// so the closing parenthesis is optional.
+final RegExp _toolCall = RegExp(r'^([A-Z][A-Za-z0-9_.:-]{1,40})\((.*)$');
 final RegExp _codexTool = RegExp(r'^(Ran|Explored|Edited|Read|Searched|Updated Plan)\b\s*(.*)$');
 
 // Tool output continuation: claude `⎿`, codex `└`.
-final RegExp _resultLine = RegExp(r'^\s*[⎿└]\s?(.*)$');
+final RegExp _resultLine = RegExp(r'^\s*[⎿└]\s*(.*)$');
 
 // Input box borders and separators drawn by TUIs.
 final RegExp _decor = RegExp(r'^[\s─━│┃╭╮╰╯┌┐└┘├┤┬┴┼═║╔╗╚╝-]*$');
 
-/// Best-effort transcript → chat items. Only `transcript` lines are used
-/// (`status` spinners and `dialog` text are left to the session status and
-/// [PendingInteraction]); a `gap` becomes a system item. Lines starting with
-/// a prompt marker open a user item, bullets open an agent (or tool, when
-/// the bullet is a `Name(args)` call) item, `⎿` lines and plain lines extend
-/// the current item. Agent text is chat markup (the lines' `md`, see
-/// [AgentdViewLine.markup]); user and tool text stay plain.
+// The line a harness prints when a turn ends (`✻ Brewed for 8s · done
+// 15:16`): a status note, not agent prose.
+final RegExp _turnEnd = RegExp(r'^[✻✶✳✢✽·*] \p{Lu}\p{L}* for \d', unicode: true);
+
+/// The tool name when [md] (a line's chat markup after its bullet) starts
+/// with a bold run followed by `(` or by nothing: how a harness draws a tool
+/// call header (`**Bash**(go test`, `**Read**` while the call is being
+/// written, `**agentd - agentd\_inbox (MCP)**(all: true)`). Null otherwise.
+String? _boldCall(String md) {
+  if (!md.startsWith('**')) return null;
+  final end = md.indexOf('**', 2);
+  if (end < 0) return null;
+  final name = md.substring(2, end).replaceAllMapped(RegExp(r'\\(.)'), (m) => m.group(1)!).trim();
+  final after = md.substring(end + 2);
+  if (name.isEmpty || (after.isNotEmpty && !after.startsWith('('))) return null;
+  return name;
+}
+
+/// The arguments of a one-line call `(args)`, or of the first line of a
+/// longer one `(args`.
+String _callArgs(String s) {
+  var t = s.trim();
+  if (t.startsWith('(')) t = t.substring(1);
+  if (t.endsWith(')')) t = t.substring(0, t.length - 1);
+  return t.trim();
+}
+
+/// Best-effort transcript → chat items, with the rules of the desktop client
+/// (agentd `internal/desktopui/app/session/chat.go`). Only `transcript`
+/// lines are used (`status` spinners and `dialog` text are left to the
+/// session status and [PendingInteraction]); a `gap` becomes a system item.
+///
+/// - A prompt marker opens a user item; the indented lines under it belong
+///   to the same prompt.
+/// - A bullet opens a tool item when it is a call header (a bold name in the
+///   line's `md`, else the `Name(args` / codex verbs fallback), an agent item
+///   otherwise. The indented lines under a tool header continue the call
+///   until the output mark (`⎿`, `└`); from there they are its output. Only a
+///   line that is not indented ends the tool item.
+/// - Agent text is chat markup (the lines' `md`, see [AgentdViewLine.markup]);
+///   a run of code lines ([AgentdViewLine.code]) becomes one block between
+///   [kChatCodeFence] lines, with its own indentation. User and tool text
+///   stay plain.
+/// - A turn end note (`✻ Brewed for 8s`) is a system item.
 List<ChatItem> chatItemsFromLines(List<AgentdViewLine> lines, {String? harness}) {
   final items = <ChatItem>[];
   ChatRole? role;
   String? title;
   String? meta;
   final buf = <String>[];
+  var output = false; // the tool item has reached its output
+  var inCode = false; // the agent item ends inside an open code block
 
-  void flush() {
-    if (role == null) return;
+  void trimEnd() {
     while (buf.isNotEmpty && buf.last.trim().isEmpty) {
       buf.removeLast();
     }
-    while (buf.isNotEmpty && buf.first.trim().isEmpty) {
-      buf.removeAt(0);
-    }
-    if (buf.isNotEmpty || title != null) {
-      items.add(ChatItem(role: role!, text: buf.join('\n'), title: title, meta: role == ChatRole.tool ? meta : null));
+  }
+
+  void closeCode() {
+    if (!inCode) return;
+    trimEnd();
+    buf.add(kChatCodeFence);
+    inCode = false;
+  }
+
+  void flush() {
+    closeCode();
+    if (role != null) {
+      trimEnd();
+      while (buf.isNotEmpty && buf.first.trim().isEmpty) {
+        buf.removeAt(0);
+      }
+      if (buf.isNotEmpty || title != null) {
+        items.add(ChatItem(role: role!, text: buf.join('\n'), title: title, meta: role == ChatRole.tool ? meta : null));
+      }
     }
     role = null;
     title = null;
     meta = null;
+    output = false;
     buf.clear();
+  }
+
+  // Appends one line to the agent item: [md] is its chat markup, [raw] its
+  // text as code (indentation kept).
+  void addAgent(String md, String raw, bool code) {
+    final blank = buf.isNotEmpty && buf.last.trim().isEmpty;
+    // An unhighlighted line right under code (a lone brace) is code too.
+    if (code || (inCode && !blank)) {
+      if (!inCode) {
+        if (buf.isNotEmpty && !blank) buf.add('');
+        buf.add(kChatCodeFence);
+        inCode = true;
+      }
+      buf.add(raw);
+      return;
+    }
+    if (inCode) {
+      closeCode();
+      buf.add('');
+    }
+    buf.add(md);
   }
 
   for (final l in lines) {
@@ -291,6 +367,12 @@ List<ChatItem> chatItemsFromLines(List<AgentdViewLine> lines, {String? harness})
     final md = l.markup.trimRight();
     if (text.isNotEmpty && _decor.hasMatch(text)) continue;
 
+    if (text.isEmpty) {
+      // A blank line never ends an item; in a call it is dropped.
+      if (role != null && !(role == ChatRole.tool && !output)) buf.add('');
+      continue;
+    }
+
     final u = _userLine.firstMatch(text);
     if (u != null) {
       flush();
@@ -302,33 +384,69 @@ List<ChatItem> chatItemsFromLines(List<AgentdViewLine> lines, {String? harness})
     if (b != null) {
       flush();
       final body = b.group(1)!.trim();
+      final mdBody = _bulletLine.firstMatch(md)?.group(1)!.trim() ?? body;
+      if (l.code) {
+        role = ChatRole.agent;
+        addAgent(mdBody, body, true);
+        continue;
+      }
+      final bold = l.md.isEmpty ? null : _boldCall(mdBody);
+      if (bold != null) {
+        role = ChatRole.tool;
+        title = bold;
+        final arg = _callArgs(body.startsWith(bold) ? body.substring(bold.length) : '');
+        if (arg.isNotEmpty) buf.add(arg);
+        continue;
+      }
       final call = _toolCall.firstMatch(body) ?? _codexTool.firstMatch(body);
       if (call != null) {
         role = ChatRole.tool;
         title = call.group(1);
-        final arg = call.group(2)!.trim();
+        final arg = identical(call.pattern, _toolCall) ? _callArgs('(${call.group(2)!}') : call.group(2)!.trim();
         if (arg.isNotEmpty) buf.add(arg);
       } else {
         role = ChatRole.agent;
-        buf.add(_bulletLine.firstMatch(md)?.group(1)!.trim() ?? body);
+        addAgent(mdBody, body, false);
       }
       continue;
     }
+    final indented = text.startsWith(' ') || text.startsWith('\u00a0');
     final r = _resultLine.firstMatch(text);
     if (r != null) {
       if (role != ChatRole.tool) {
         flush();
         role = ChatRole.tool;
       }
+      output = true;
       meta ??= _summary(r.group(1)!);
       buf.add(r.group(1)!);
       continue;
     }
-    if (role == null) {
-      if (text.trim().isEmpty) continue;
-      role = ChatRole.agent;
+    if (!indented) {
+      // A line at the left margin is not part of a prompt or a tool call.
+      if (_turnEnd.hasMatch(text)) {
+        flush();
+        items.add(ChatItem(role: ChatRole.system, text: text));
+        continue;
+      }
+      if (role != ChatRole.agent) {
+        flush();
+        role = ChatRole.agent;
+      }
+      addAgent(md, text, l.code);
+      continue;
     }
-    buf.add(_dedent(role == ChatRole.agent ? md : text));
+    switch (role) {
+      case ChatRole.tool:
+        // Before the output mark the call goes on (a wrapped path, a
+        // multi-line command); after it, more output.
+        buf.add(output ? _dedent(text, 5) : _dedent(text, 2));
+      case ChatRole.user:
+        buf.add(text.trim());
+      case ChatRole.agent || ChatRole.system || null:
+        role = ChatRole.agent;
+        addAgent(_dedent(md, 2), _dedent(text, 2), l.code);
+    }
   }
   flush();
   return items;
@@ -341,10 +459,11 @@ String? _summary(String line) {
   return t.length <= 60 ? t : '${t.substring(0, 59)}…';
 }
 
-String _dedent(String s) {
-  // Continuation lines are indented under the bullet (2 columns).
+/// [s] without up to [max] leading spaces: continuation lines are indented
+/// under the bullet (2 columns), tool output under its mark (5).
+String _dedent(String s, int max) {
   var i = 0;
-  while (i < 2 && i < s.length && (s[i] == ' ' || s[i] == ' ')) {
+  while (i < max && i < s.length && (s[i] == ' ' || s[i] == '\u00a0')) {
     i++;
   }
   return s.substring(i);

@@ -1,6 +1,9 @@
-// Pure Dart parser of tables inside chat text: Claude Code draws markdown
-// tables as box-drawing text (light, heavy, double, rounded) and agents also
-// emit plain markdown pipe tables. Anything inconsistent stays plain text.
+// Pure Dart parser of the blocks inside chat text. Tables: Claude Code draws
+// markdown tables as box-drawing text (light, heavy, double, rounded) and
+// agents also emit plain markdown pipe tables; anything inconsistent stays
+// plain text. Code blocks: the text between two [kChatCodeFence] lines.
+
+import '../../core/contracts.dart' show kChatCodeFence;
 
 /// A parsed table. [header] is null when the source had no header separator.
 class ChatTable {
@@ -52,6 +55,12 @@ class TextSegment extends ChatSegment {
 class TableSegment extends ChatSegment {
   const TableSegment(this.table);
   final ChatTable table;
+}
+
+/// Program text, shown as is (no markup, no tables).
+class CodeSegment extends ChatSegment {
+  const CodeSegment(this.code);
+  final String code;
 }
 
 const _vertical = '│┃║';
@@ -114,9 +123,46 @@ List<String> _splitPipes(String s) {
   return out;
 }
 
-/// Splits [text] into text and table segments. Text without any table comes
-/// back as a single [TextSegment] holding the original string.
+/// Splits [text] into text, table and code segments. Text without any table
+/// or code block comes back as a single [TextSegment] holding the original
+/// string.
 List<ChatSegment> parseChatSegments(String text) {
+  if (text.isEmpty) return const [];
+  if (!text.contains(kChatCodeFence)) return _textAndTables(text);
+  final out = <ChatSegment>[];
+  final pending = <String>[];
+  List<String>? code;
+  void flushText() {
+    while (pending.isNotEmpty && pending.last.trim().isEmpty) {
+      pending.removeLast();
+    }
+    while (pending.isNotEmpty && pending.first.trim().isEmpty) {
+      pending.removeAt(0);
+    }
+    if (pending.isNotEmpty) out.addAll(_textAndTables(pending.join('\n')));
+    pending.clear();
+  }
+
+  for (final line in text.split('\n')) {
+    if (line == kChatCodeFence) {
+      if (code == null) {
+        flushText();
+        code = [];
+      } else {
+        if (code.isNotEmpty) out.add(CodeSegment(code.join('\n')));
+        code = null;
+      }
+    } else {
+      (code ?? pending).add(line);
+    }
+  }
+  // An unclosed block (the agent is still writing it) is code too.
+  if (code != null && code.isNotEmpty) out.add(CodeSegment(code.join('\n')));
+  flushText();
+  return out;
+}
+
+List<ChatSegment> _textAndTables(String text) {
   if (text.isEmpty) return const [];
   final lines = text.split('\n');
   final cls = [for (final l in lines) _classify(l)];

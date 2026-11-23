@@ -379,9 +379,17 @@ class AgentSession {
 
 enum ChatRole { user, agent, tool, system }
 
+/// Line that opens and closes a code block inside the text of an agent
+/// [ChatItem]: what is between two of them is program text, shown as is.
+const kChatCodeFence = '````';
+
 class ChatItem {
   const ChatItem({required this.role, required this.text, this.title, this.ok, this.meta});
   final ChatRole role;
+
+  /// user: the prompt. agent: chat markup, with code blocks between
+  /// [kChatCodeFence] lines. tool: the call (its arguments, which may span
+  /// several lines) followed by its output. system: a status note.
   final String text;
   final String? title; // tool name / command
   final bool? ok;

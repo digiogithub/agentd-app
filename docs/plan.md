@@ -105,6 +105,38 @@ Dark, light and system (`ThemeChoice` in Ajustes > Apariencia). `ui/theme.dart`:
 
 `ui/chat/table_parser.dart` (pure Dart): `parseChatSegments(text)` splits an agent item into text and table segments. It handles Claude Code box-drawing tables (light, heavy, double, rounded; indentation and a `⏺` prefix tolerated; column bounds from `┬┼` positions; cell fragments of one row joined with a space; header = first row when an inner separator follows; without separators between body rows a line with an empty first cell continues the previous row) and markdown pipe tables (separator row required). Inconsistent column counts = no table: the lines stay plain text. `chat_table_view.dart` renders a table (bold header on `raised`, palette borders, columns 80..260 wide, horizontal scroll, long-press a cell or "Copiar tabla" copies). `links.dart`: `findUrls` (http/https, trailing punctuation trimmed unless parens balance) and `urlLauncherProvider` (url_launcher, `LaunchMode.externalApplication`; overridden in tests); `linkified_text.dart` renders `code` + links for user and agent text. Android `<queries>` has a VIEW/https intent and iOS `LSApplicationQueriesSchemes` has `https`. Send failures map `AgentdError.code` to a Spanish toast (`sendErrorMessage` in `chat_tab.dart`). Tests: `test/ui/chat/`.
 
+## Chat selection, tool grouping and code blocks
+
+Same rules as agentd-desktop AGED-US-0051 (agentd commit `17215a3`, `internal/desktopui/app/session/chat.go`
+`Items`); its two tests are ported in `test/agentd/mapping_test.dart`. Added on 2026-11-23, version 1.4.0.
+No daemon contract change: the app reads one more optional field.
+
+- **Selection**: `ChatTab` wraps the chat `ListView` in a `SelectionArea`: long-press selects, handles
+  extend across paragraphs and entries, the platform toolbar copies. The question card and the copy
+  button of a code block are `SelectionContainer.disabled`. With a selection up, the first tap only
+  dismisses it. A table cell keeps its own long-press (copy the cell). Entries scrolled far out of
+  the list are not part of a selection (the list builds lazily). The composer is a plain `TextField`:
+  paste always worked.
+- **Wire**: `AgentdViewLine.code` (JSON `code: true`, view `markup: true`, agentd 0.8.2 or later;
+  absent = false, so older daemons give no code blocks). A code line has no `md`.
+- **Parser** (`agentd/mapping.dart` `chatItemsFromLines`):
+  - Tool header: a bullet line whose `md` starts with a bold run followed by `(` or by nothing
+    (`_boldCall`: `**Bash**(go test`, `**Read**`, `**agentd - agentd\_inbox (MCP)**(all: true)`).
+    Fallback without `md`: `Name(args` (closing parenthesis optional) and the codex verbs. A code
+    line is never a header.
+  - Under a tool header, indented lines continue the call until the output mark (`⎿`, codex `└`);
+    from there they are output. Blank lines do not end the item; only a line at the left margin
+    does. `ChatItem.title` = tool name, `text` = call arguments then output, `meta` = first output
+    line.
+  - Indented lines after a prompt marker belong to that user item.
+  - A turn end note (`✻ Brewed for 8s`, `_turnEnd`) is a system item.
+  - A run of code lines becomes one block between `kChatCodeFence` lines (four backticks, in
+    `core/contracts.dart`) inside the agent item: text minus the bullet, or minus at most two
+    leading spaces. A blank line followed by code stays in the block; a non-code line right under
+    code (a lone `}`) belongs to it; a blank line followed by prose closes it.
+- **Rendering**: `parseChatSegments` yields `CodeSegment` (also for a block still open); `ChatCodeBlock`
+  (`ui/chat/chat_table_view.dart`) draws it monospace, no markup, horizontal scroll, `Copiar código`.
+
 ## Projects, terminal only, folder browser, terminate
 
 Spec: `agentd/docs/plans/agentd/workspace-ux_plan.md` (same behaviour on the desktop client).

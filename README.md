@@ -45,6 +45,19 @@ bottom sends the text as a prompt to each picked agent at once.
   refused it stay selected, named with the cause, so you can retry. When all took it, the draft
   is cleared and the selection mode ends. Leaving the mode clears the selection.
 
+## Chat: select, copy, tool calls and code
+
+- Long-press any text of the chat (your prompts, the agent's answer, the output of a tool, code)
+  to select it; drag the handles to extend the selection over several paragraphs or entries, then
+  **Copy**. **Select all** takes the whole chat that is loaded. The composer takes a paste as any
+  text field.
+- A tool call of the agent is one card: its name, then, expanded, the whole call (also when the
+  command spans several lines) and its output. Calls still being written and MCP calls are cards
+  too; none of it shows as prose.
+- Code in the agent's answer is a block in a monospace font, as written (no markup), that scrolls
+  sideways and has a copy button. This needs agentd 0.8.2 or later on the host; older daemons
+  show code as plain text.
+
 ## Panel (work dashboard)
 
 The first tab. It shows, across every connected host whose agentd has the

@@ -238,7 +238,8 @@ class _ChatTabState extends ConsumerState<ChatTab> {
         onWriteOther: () => widget.composerFocus.requestFocus(),
       );
       // A view-only relay device sees the question but cannot answer it.
-      children.add(canOperate ? card : IgnorePointer(child: Opacity(opacity: 0.55, child: card)));
+      // The question card is answered, not selected.
+      children.add(SelectionContainer.disabled(child: canOperate ? card : IgnorePointer(child: Opacity(opacity: 0.55, child: card))));
     }
 
     return Column(
@@ -252,7 +253,11 @@ class _ChatTabState extends ConsumerState<ChatTab> {
                 )
               : Stack(
                   children: [
-                    ListView(controller: _scroll, padding: const EdgeInsets.fromLTRB(16, 16, 16, 8), children: children),
+                    // Long-press selects chat text; the handles extend the
+                    // selection across paragraphs and entries, Copy copies it.
+                    SelectionArea(
+                      child: ListView(controller: _scroll, padding: const EdgeInsets.fromLTRB(16, 16, 16, 8), children: children),
+                    ),
                     if (!_follow)
                       Positioned(
                         right: 16,
@@ -710,6 +715,7 @@ class _AgentText extends ConsumerWidget {
           if (i > 0) const SizedBox(height: 8),
           switch (s) {
             TextSegment() => prose(s.text),
+            CodeSegment() => ChatCodeBlock(code: s.code, fontSize: font.$2 - 2),
             TableSegment() => ChatTableView(
               table: ChatTable(
                 header: s.table.header?.map(unmarkup).toList(),

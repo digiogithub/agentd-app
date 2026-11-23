@@ -205,9 +205,13 @@ class AgentdAttention {
 }
 
 class AgentdViewLine {
-  const AgentdViewLine(this.text, this.role, {this.md = ''});
-  factory AgentdViewLine.fromJson(Json j) => AgentdViewLine(_str(j['text']), _str(j['role']), md: _str(j['md']));
+  const AgentdViewLine(this.text, this.role, {this.md = '', this.code = false});
+  factory AgentdViewLine.fromJson(Json j) => AgentdViewLine(_str(j['text']), _str(j['role']), md: _str(j['md']), code: j['code'] == true);
   final String text;
+
+  /// The line is syntax-highlighted program text (view `markup: true`,
+  /// agentd 0.8.2 or later; older daemons never send it). It has no [md].
+  final bool code;
 
   /// Chat markup of the line (view `markup: true`): CommonMark built from
   /// the terminal styles; empty when it equals [text].

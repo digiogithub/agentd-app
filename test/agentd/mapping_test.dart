@@ -61,7 +61,7 @@ void main() {
     expect(items[0].text, 'fix the lint errors');
     expect(items[1].text, 'I will run the linter first.');
     expect(items[2].title, 'Bash');
-    expect(items[2].text, 'npm run lint\n 3 errors found\n   src/a.ts:1');
+    expect(items[2].text, 'npm run lint\n3 errors found\nsrc/a.ts:1');
     expect(items[2].meta, '3 errors found');
     expect(items[1].meta, isNull);
   });
@@ -174,6 +174,78 @@ void main() {
     expect(items.last.role, ChatRole.tool);
     expect(AgentdViewLine.fromJson({'text': 'a', 'role': 'transcript', 'md': '**a**'}).markup, '**a**');
     expect(const AgentdViewLine('a*b', 'transcript').markup, 'a*b');
+  });
+
+  // The cases of agentd's TestItemsGroupMultiLineToolCalls.
+  test('multi-line, bare and MCP tool calls are grouped in tool items', () {
+    final items = chatItemsFromLines(const [
+      AgentdViewLine('● Miro el estado.', 'transcript'),
+      AgentdViewLine('', 'transcript'),
+      AgentdViewLine("● Bash(agentd task set <<'EOF'", 'transcript', md: r"● **Bash**(agentd task set \<\<'EOF'"),
+      AgentdViewLine('  [', 'transcript', md: r'  \['),
+      AgentdViewLine('', 'transcript'),
+      AgentdViewLine('   {"id":"a"}', 'transcript'),
+      AgentdViewLine('  EOF)', 'transcript'),
+      AgentdViewLine('  ⎿  revision 2', 'transcript'),
+      AgentdViewLine('     second line', 'transcript'),
+      AgentdViewLine('', 'transcript'),
+      AgentdViewLine('● Read', 'transcript', md: '● **Read**'),
+      AgentdViewLine('', 'transcript'),
+      AgentdViewLine('● agentd - agentd_inbox (MCP)(all: true)', 'transcript', md: r'● **agentd - agentd\_inbox (MCP)**(all: true)'),
+      AgentdViewLine('● Listo', 'transcript'),
+      AgentdViewLine('✻ Brewed for 8s · done 15:16', 'transcript'),
+    ]);
+    expect(items.map((i) => i.role), [ChatRole.agent, ChatRole.tool, ChatRole.tool, ChatRole.tool, ChatRole.agent, ChatRole.system]);
+    final bash = items[1];
+    expect(bash.title, 'Bash');
+    // The whole call, then its output; nothing leaks into the prose.
+    expect(bash.text, "agentd task set <<'EOF'\n[\n {\"id\":\"a\"}\nEOF)\nrevision 2\nsecond line");
+    expect(bash.meta, 'revision 2');
+    expect((items[2].title, items[2].text), ('Read', ''));
+    expect((items[3].title, items[3].text), ('agentd - agentd_inbox (MCP)', 'all: true'));
+    expect(items[4].text, 'Listo');
+    expect(items[5].text, '✻ Brewed for 8s · done 15:16');
+  });
+
+  test('without markup, an unclosed call still opens a tool item', () {
+    final items = chatItemsFromLines(const [
+      AgentdViewLine("● Bash(cat <<'EOF'", 'transcript'),
+      AgentdViewLine('  hola', 'transcript'),
+      AgentdViewLine('  EOF)', 'transcript'),
+      AgentdViewLine('  ⎿  hola', 'transcript'),
+      AgentdViewLine('● Read(a.go)', 'transcript'),
+    ]);
+    expect(items.map((i) => (i.role, i.title)), [(ChatRole.tool, 'Bash'), (ChatRole.tool, 'Read')]);
+    expect(items[0].text, "cat <<'EOF'\nhola\nEOF)\nhola");
+    expect(items[1].text, 'a.go');
+  });
+
+  // The cases of agentd's TestItemsFenceCodeAndJoinPrompt.
+  test('code lines become one fenced block; a prompt of several lines is one item', () {
+    final items = chatItemsFromLines(const [
+      AgentdViewLine('❯ primera línea', 'transcript'),
+      AgentdViewLine('  segunda línea', 'transcript'),
+      AgentdViewLine('● Instálalo así:', 'transcript'),
+      AgentdViewLine('', 'transcript'),
+      AgentdViewLine('  func main() {', 'transcript', code: true),
+      AgentdViewLine('', 'transcript'),
+      AgentdViewLine('      run("a_b")', 'transcript', code: true),
+      AgentdViewLine('  }', 'transcript'),
+      AgentdViewLine('', 'transcript'),
+      AgentdViewLine('  Y reinicia `agentd`.', 'transcript', md: r'  Y reinicia \`agentd\`.'),
+      AgentdViewLine('● sudo dpkg -i a.deb', 'transcript', code: true),
+    ]);
+    expect(items.map((i) => i.role), [ChatRole.user, ChatRole.agent, ChatRole.agent]);
+    expect(items[0].text, 'primera línea\nsegunda línea');
+    expect(items[1].text, 'Instálalo así:\n\n````\nfunc main() {\n\n    run("a_b")\n}\n````\n\nY reinicia \\`agentd\\`.');
+    expect(items[2].text, '````\nsudo dpkg -i a.deb\n````');
+  });
+
+  test('a daemon without code lines gives no code blocks', () {
+    expect(AgentdViewLine.fromJson({'text': 'x := 1', 'role': 'transcript'}).code, isFalse);
+    expect(AgentdViewLine.fromJson({'text': 'x := 1', 'role': 'transcript', 'code': true}).code, isTrue);
+    final items = chatItemsFromLines(const [AgentdViewLine('● Así:', 'transcript'), AgentdViewLine('', 'transcript'), AgentdViewLine('  x := 1', 'transcript')]);
+    expect(items.single.text, 'Así:\n\nx := 1');
   });
 
   test('mail and queues', () {

@@ -128,3 +128,52 @@ class ChatTableView extends StatelessWidget {
     );
   }
 }
+
+/// A code block of the agent: monospace, scrolls sideways, with a button
+/// that copies the whole block.
+class ChatCodeBlock extends StatelessWidget {
+  const ChatCodeBlock({super.key, required this.code, this.fontSize = 12.5});
+  final String code;
+  final double fontSize;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    container: true,
+    label: 'Bloque de código',
+    child: Container(
+      key: const ValueKey('code-block'),
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
+              child: Text(code, softWrap: false, style: AppFonts.mono(size: fontSize, color: AppColors.text, height: 1.45)),
+            ),
+          ),
+          // The button is not part of a text selection.
+          SelectionContainer.disabled(
+            child: RoundIconButton(
+              key: const ValueKey('copy-code'),
+              icon: Icons.copy,
+              label: 'Copiar código',
+              fg: AppColors.muted,
+              iconSize: 16,
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: code));
+                showToast(context, 'Código copiado');
+              },
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
