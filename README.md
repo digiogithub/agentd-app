@@ -70,7 +70,7 @@ work dashboard (op `board`, agentd 0.8.0 or later):
   cancelled tasks do not count) and the task in progress. Agents that reported no tasks show
   their status and last line.
 - Counters (te esperan, tasks in progress, tasks pending) and a host filter.
-- **Backlog** (one section per host, agentd with backlog notes): notes and future tasks you write
+- **Backlog** (one section per host, agentd 0.9.0 or later): notes and future tasks you write
   down on the host. **Añadir nota** takes a title and an optional detail; tapping a note edits,
   deletes (after a confirmation) or reopens it. **Asignar** hands an open note to a running
   agent of the same host as a *pendiente* or *en curso* task: the agent is told through its
@@ -131,6 +131,7 @@ starts and removes a `sh` session).
 ## Paired devices
 
 Ajustes > **Dispositivos** lists the connected hosts that run agentd; each one opens the devices
+(over the relay this needs agentd 0.9.0 or later on the host; older ones refuse the list)
 paired with it through agentd-relay (name, platform, scope, guest, session limits, last seen,
 connected). **Revocar** asks for confirmation and closes that device's access until it is paired
 again with a new invite. Over SSH every device is listed and revocable. Over the relay an owner

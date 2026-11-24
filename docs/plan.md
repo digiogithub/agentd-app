@@ -237,7 +237,7 @@ Protocol v1 and design live in agentd: `docs/plans/agentd/relay_plan.md` (normat
 ## Paired devices (Ajustes > Dispositivos)
 
 2026-11-24, version 1.7.0; contract in agentd `docs/plans/agentd/backlog-notes_plan.md`, section
-"Relay devices".
+"Relay devices". Relay devices may use the op from agentd 0.9.0 (before it, `forbidden`).
 
 - **Wire**: op `relay {action: "devices"}` → `devices[]` (`AgentdRelayDevice`: id, name, platform,
   scope, sessions, kind, created_at, expires_at, last_seen, online; invites are ignored) and
@@ -288,7 +288,7 @@ https://claude.ai/artifact/187awNfuofy4KQZ2zYBLSG (Panel, answer sheet, agent ta
   never injected); if that reply fails (a daemon without `notify`) the prompt result is kept and
   a toast says the question is still open.
 - **Backlog notes** (2026-11-24; agentd `docs/plans/agentd/backlog-notes_plan.md`, normative;
-  version 1.6.0). Wire: ops `notes {states?, since_digest?}`, `note_add {title, body?}`,
+  version 1.6.0; needs agentd 0.9.0). Wire: ops `notes {states?, since_digest?}`, `note_add {title, body?}`,
   `note_update {id, title?, body?, state?: "open"}`, `note_rm {id}`,
   `note_assign {id, session, status?: in_progress, notify?: false}` (defaults are not sent), event
   `note.changed` (`NoteChangedEvent`, no session), `Task.origin` (`AgentTask.fromBacklog`).
