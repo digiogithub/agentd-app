@@ -7,6 +7,8 @@ import 'dart:typed_data';
 
 import 'package:cryptography/dart.dart';
 
+import '../core/contracts.dart' show relayLinkCandidates;
+
 /// WebSocket subprotocol of every relay endpoint.
 const relaySubprotocol = 'agentd-relay.v1';
 
@@ -124,11 +126,25 @@ class RelayInvite {
   final String label;
 
   /// Parses and validates a link (Go `ParseInvite`). Throws
-  /// [InviteFormatError]; the message never contains the code.
+  /// [InviteFormatError]; the message never contains the code. [link] may be
+  /// pasted or scanned text: surrounding text and terminal line wraps are
+  /// tolerated ([relayLinkCandidates]).
   static RelayInvite parse(String link) {
+    InviteFormatError? first;
+    for (final c in relayLinkCandidates(link)) {
+      try {
+        return _parseStrict(c);
+      } on InviteFormatError catch (e) {
+        first ??= e;
+      }
+    }
+    throw first ?? const InviteFormatError('invite: not an agentd relay link');
+  }
+
+  static RelayInvite _parseStrict(String link) {
     final Uri u;
     try {
-      u = Uri.parse(link.trim());
+      u = Uri.parse(link);
     } on FormatException {
       throw const InviteFormatError('invite: not an agentd relay link');
     }

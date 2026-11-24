@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:agentd_app/src/core/contracts.dart' show relayLinkCandidates;
 import 'package:agentd_app/src/relay/relay.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -82,6 +83,74 @@ void main() {
       expect(() => RelayInvite.parse(link(e.value)), throwsA(isA<InviteFormatError>()));
     });
   }
+
+  group('pasted or scanned text', () {
+    final plain = link({});
+    void same(String text) {
+      final inv = RelayInvite.parse(text);
+      expect(inv.toString(), RelayInvite.parse(plain).toString(), reason: 'input of ${text.length} chars');
+    }
+
+    test('whitespace and newlines around the link', () {
+      same('  $plain  ');
+      same('\n\t$plain\r\n');
+    });
+
+    test('the "Link:" line of agentd relay invite, with what follows', () {
+      same('Link:  $plain');
+      same('Link:  $plain\nGrant: operate (owner); valid until 21:40:00. Waiting for a device (Ctrl-C cancels)...\n');
+      same('usa este enlace: $plain y dime');
+      same('<$plain>');
+      same('"$plain"');
+      same('Enlace ($plain).');
+    });
+
+    test('terminal line wraps anywhere in the link', () {
+      for (final at in [20, 60, 100, 140, plain.length - 2]) {
+        same('${plain.substring(0, at)}\n${plain.substring(at)}');
+        same('Link:  ${plain.substring(0, at)}  \r\n   ${plain.substring(at)}\n');
+      }
+      // Three lines of 40 columns.
+      final lines = [for (var i = 0; i < plain.length; i += 40) plain.substring(i, i + 40 > plain.length ? plain.length : i + 40)];
+      same(lines.join('\n'));
+    });
+
+    test('a wrapped link followed by other text keeps the secret fields', () {
+      final at = plain.indexOf('&c=') + 10;
+      final inv = RelayInvite.parse('Link:  ${plain.substring(0, at)}\n${plain.substring(at)}\nGrant: view');
+      expect(inv.code, code);
+      expect(inv.route, 'abcdefghijklmnopqrstuvwx27');
+    });
+
+    test('url-encoded parameters are decoded', () {
+      final inv = RelayInvite.parse(link({'u': 'https://relay.example.com/a b', 'h': 'café de José & co'}));
+      expect(inv.relayUrl, 'https://relay.example.com/a b');
+      expect(inv.label, 'café de José & co');
+      expect(RelayInvite.parse(plain.replaceFirst('https%3A%2F%2F', 'https://')).relayUrl, 'https://relay.example.com');
+      // An upper-case scheme (some QR readers) is the same link.
+      same(plain.replaceFirst('agentd://', 'AGENTD://'));
+    });
+
+    test('the first link wins and a cut link is refused', () {
+      same('$plain agentd://relay?v=1&u=x');
+      expect(() => RelayInvite.parse(plain.substring(0, plain.indexOf('&c=') + 12)), throwsA(isA<InviteFormatError>()));
+      expect(() => RelayInvite.parse('agentd://relay?'), throwsA(isA<InviteFormatError>()));
+    });
+
+    test('candidates: wrapped lines joined first, the first line alone second', () {
+      expect(relayLinkCandidates('nothing here'), isEmpty);
+      expect(relayLinkCandidates('x agentd://relay?v=1&h=a. y'), ['agentd://relay?v=1&h=a']);
+      // A line with other text does not continue the link.
+      expect(relayLinkCandidates('agentd://relay?v=1\n&h=a z'), ['agentd://relay?v=1']);
+      expect(relayLinkCandidates('agentd://relay?v=1\n&h=a\nz z'), ['agentd://relay?v=1&h=a', 'agentd://relay?v=1']);
+      expect(relayLinkCandidates('agentd://relay?v=1 x\n&h=a'), ['agentd://relay?v=1']);
+    });
+
+    test('a single word on the next line cannot break the secret fields', () {
+      final noLabel = link({'h': null});
+      expect(RelayInvite.parse('$noLabel\nCancelled').code, code);
+    });
+  });
 
   test('refuses other links', () {
     for (final l in ['https://relay.example.com', 'agentd://pair?v=1', 'agentd://open?h=x', 'not a link at all', '']) {

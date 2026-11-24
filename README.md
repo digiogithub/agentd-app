@@ -96,6 +96,10 @@ this screen yet.
 2. On the phone: Hosts > + > **Invitación relay**, paste the `agentd://relay?...` link (or open
    it on the phone: Android and iOS register the `agentd://relay` link), give the device a name,
    **Emparejar**, and approve on the host (`Approve? [y/N]`).
+   The link may be pasted as the terminal shows it: the `Link:` prefix, the text after it and
+   line wraps are ignored. A failed pairing stays on screen with its reason and a **Reintentar**
+   button; "El host no está conectado al relay" means the host's daemon is not linked to the
+   relay (`agentd relay status` on the host), so no invite can work until it is.
 3. The host appears with a `relay` tag and its scope. Only agentd sessions are listed (no
    zellij/tmux/shells/provisioning/folder browser/image upload: those need a shell, SSH only).
    The UI follows the scope the host granted: `view` = read-only chat, approvals shown but not

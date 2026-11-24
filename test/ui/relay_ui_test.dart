@@ -3,6 +3,7 @@
 import 'dart:async';
 
 import 'package:agentd_app/src/core/contracts.dart';
+import 'package:agentd_app/src/relay/relay.dart' show RelayError, RelayFailure;
 import 'package:agentd_app/src/ui/app.dart';
 import 'package:agentd_app/src/ui/providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' show ProviderScope;
@@ -83,6 +84,40 @@ void main() {
     await tester.pump();
     expect(find.text('Pega el enlace agentd://relay?… de agentd relay invite'), findsOneWidget);
     expect(fakes.hosts.relayPairings, 0);
+  });
+
+  testWidgets('a link pasted with the terminal prefix and line wraps pairs', (tester) async {
+    final fakes = Fakes();
+    await pumpUi(tester, const AddHostScreen(), fakes: fakes, height: 1100);
+    await tester.tap(find.text('Invitación relay'));
+    await settle(tester);
+    await tester.enterText(find.byKey(const ValueKey('relay-link')), 'Link:  ${_link.substring(0, 70)}\n${_link.substring(70)}\nGrant: operate');
+    await tester.tap(find.text('Emparejar'));
+    await settle(tester);
+    expect(fakes.hosts.relayPairings, 1);
+    expect(fakes.hosts.hosts.firstWhere((h) => h.config.isRelay).config.name, 'box');
+  });
+
+  testWidgets('host offline at the relay: explicit error that stays, and a retry', (tester) async {
+    final fakes = Fakes();
+    fakes.hosts.pairError = const RelayError(RelayFailure.hostOffline, 'the host is not connected to the relay');
+    await pumpUi(tester, const AddHostScreen(relayLink: _link), fakes: fakes, height: 1300);
+    await tester.tap(find.text('Emparejar'));
+    await settle(tester);
+    expect(find.byKey(const ValueKey('relay-pair-error')), findsOneWidget);
+    expect(find.textContaining('El host no está conectado al relay'), findsOneWidget);
+    expect(find.textContaining('agentd relay status'), findsOneWidget);
+    // No spinner left, the link is kept for the retry.
+    expect(find.text('Conectando…'), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.text(_link), findsOneWidget);
+    await settle(tester, frames: 80); // longer than a toast
+    expect(find.byKey(const ValueKey('relay-pair-error')), findsOneWidget);
+    fakes.hosts.pairError = null;
+    await tester.tap(find.text('Reintentar'));
+    await settle(tester);
+    expect(find.byKey(const ValueKey('relay-pair-error')), findsNothing);
+    expect(fakes.hosts.relayPairings, 1);
   });
 
   testWidgets('hosts list shows a relay host with its scope', (tester) async {

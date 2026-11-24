@@ -493,6 +493,37 @@ abstract class HostsRepository {
   Future<HostConfig> enrollWithPassword(HostConfig config, String password);
 }
 
+final _relayLinkStart = RegExp(r'agentd://relay\?', caseSensitive: false);
+final _relayLinkBody = RegExp(r'^[A-Za-z0-9\-._~%+&=:/]*');
+final _relayLinkLine = RegExp(r'\r\n|\n|\r');
+
+/// The `agentd://relay?...` invite links that [text] may hold, best guess
+/// first. [text] is what a person pasted or a camera scanned: the link may
+/// have text around it (`Link:  agentd://...` copied from the terminal) and
+/// may be cut by the terminal's line wraps. The first candidate joins the
+/// following lines that hold nothing but link characters (a wrapped link);
+/// the second one is the first line alone. Nothing is validated here: the
+/// caller parses the candidates in order.
+List<String> relayLinkCandidates(String text) {
+  final m = _relayLinkStart.firstMatch(text);
+  if (m == null) return const [];
+  // A sentence's full stop is not part of the link.
+  String link(String body) => 'agentd://relay?${body.replaceFirst(RegExp(r'\.+$'), '')}';
+  final lines = text.substring(m.end).split(_relayLinkLine);
+  final first = _relayLinkBody.stringMatch(lines.first) ?? '';
+  final joined = StringBuffer(first);
+  // The link runs to the end of its line: the next lines may continue it.
+  if (first.length == lines.first.trimRight().length) {
+    for (final l in lines.skip(1)) {
+      final t = l.trim();
+      if (t.isEmpty || _relayLinkBody.stringMatch(t) != t) break;
+      joined.write(t);
+    }
+  }
+  final a = link(joined.toString()), b = link(first);
+  return [a, if (b != a) b];
+}
+
 /// Progress of [HostsRepository.pairRelay].
 enum RelayPairPhase {
   /// Reaching the relay and running the handshake.

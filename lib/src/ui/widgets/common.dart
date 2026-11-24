@@ -491,6 +491,7 @@ class AppTextField extends StatelessWidget {
     this.radius = 12,
     this.textInputAction,
     this.onChanged,
+    this.maxLines = 1,
   });
 
   final TextEditingController? controller;
@@ -505,6 +506,10 @@ class AppTextField extends StatelessWidget {
   final double radius;
   final TextInputAction? textInputAction;
   final ValueChanged<String>? onChanged;
+
+  /// More than 1: the field grows up to this many lines and keeps the line
+  /// breaks of a pasted text.
+  final int maxLines;
 
   static InputDecoration decoration({String? hint, bool mono = false, double radius = 12, EdgeInsets? padding}) {
     OutlineInputBorder b(Color c) => OutlineInputBorder(
@@ -531,6 +536,8 @@ class AppTextField extends StatelessWidget {
     focusNode: focusNode,
     enabled: enabled,
     obscureText: obscure,
+    minLines: 1,
+    maxLines: maxLines,
     keyboardType: keyboardType,
     textInputAction: textInputAction,
     onSubmitted: onSubmitted,

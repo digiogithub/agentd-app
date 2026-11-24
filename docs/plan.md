@@ -207,6 +207,17 @@ Protocol v1 and design live in agentd: `docs/plans/agentd/relay_plan.md` (normat
   the host waits); `agentd://relay` links open it (app_links; Android intent filter, iOS URL scheme;
   Flutter's route deep linking is off). Hosts list: `relay` + scope tags, offline reason. Session
   screen / agents list / new session hide what the scope forbids (`hostConfigProvider`).
+- **Invite text** (2026-11-24): `relayLinkCandidates` (`core/contracts.dart`) finds the link in
+  pasted or scanned text: text around it (`Link:  agentd://...`), an upper-case scheme, and
+  terminal line wraps (the following lines that hold only link characters are joined; the first
+  line alone is the second candidate). `RelayInvite.parse` validates the candidates in order, so
+  the fixed-length fields (route, keys, invite id) decide. The invite field is multi-line so a
+  system paste keeps the line breaks. Bug fixed: the form refused anything that did not start with
+  `agentd://relay?`, which is what a line copied from `agentd relay invite` (`Link:  ...`) is.
+- **Pairing errors**: a failed pairing is an inline box (`relay-pair-error`, reason +
+  `pairErrorHint`) and the button becomes "Reintentar"; the link stays in the field. A host that
+  is not linked to the relay answers at once (the relay closes the tunnel with 4404 =
+  `RelayFailure.hostOffline`); the relay dial and the handshake have 15 s and 20 s timeouts.
 - **Tests**: vectors, mux (window, credit, close, limits, tunnel drop), invite parser, client
   against an in-memory fake host that follows the protocol (`test/relay/fake_host.dart`), a
   loopback WebSocket server, the repository (`test/data/relay_hosts_test.dart`), UI

@@ -8,7 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/contracts.dart';
-import '../../data/hosts_repository.dart' show describeConnectError;
+import '../../data/hosts_repository.dart' show describeConnectError, pairErrorHint;
 import '../providers.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -40,6 +40,11 @@ class _AddHostScreenState extends ConsumerState<AddHostScreen> {
   AuthKind _auth = AuthKind.generatedKey;
   HostTransport _transport = HostTransport.ssh;
   RelayPairPhase? _phase;
+
+  /// The last pairing failure (Spanish) and what to do about it; shown
+  /// until the next attempt.
+  String? _pairError;
+  String? _pairHint;
   String? _publicKey;
   bool _busy = false;
 
@@ -113,12 +118,22 @@ class _AddHostScreenState extends ConsumerState<AddHostScreen> {
       showToast(context, 'El portapapeles está vacío');
       return;
     }
-    setState(() => _link.text = t);
+    if (relayLinkCandidates(t).isEmpty) {
+      showToast(context, 'El portapapeles no contiene un enlace agentd://relay?…');
+      return;
+    }
+    setState(() {
+      _link.text = t;
+      _pairError = null;
+      _pairHint = null;
+    });
   }
 
   Future<void> _pair() async {
+    // The repository finds the link in the text (a "Link:" prefix, line
+    // wraps of the terminal).
     final link = _link.text.trim();
-    if (!link.startsWith('agentd://relay?')) {
+    if (relayLinkCandidates(link).isEmpty) {
       showToast(context, 'Pega el enlace agentd://relay?… de agentd relay invite');
       return;
     }
@@ -126,6 +141,8 @@ class _AddHostScreenState extends ConsumerState<AddHostScreen> {
     setState(() {
       _busy = true;
       _phase = RelayPairPhase.connecting;
+      _pairError = null;
+      _pairHint = null;
     });
     try {
       final c = await ref
@@ -143,7 +160,13 @@ class _AddHostScreenState extends ConsumerState<AddHostScreen> {
       showToast(context, 'Emparejado con ${c.name}');
       Navigator.of(context).maybePop();
     } catch (e) {
-      if (mounted) showToast(context, 'No se pudo emparejar: ${describeConnectError(e)}');
+      // Stays on screen (a toast is gone before it is read) with a retry.
+      if (mounted) {
+        setState(() {
+          _pairError = describeConnectError(e);
+          _pairHint = pairErrorHint(e);
+        });
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -191,6 +214,10 @@ class _AddHostScreenState extends ConsumerState<AddHostScreen> {
                     mono: true,
                     enabled: !_busy,
                     keyboardType: TextInputType.url,
+                    textInputAction: TextInputAction.done,
+                    // Several lines: a link pasted with the terminal's line
+                    // wraps keeps them, so the text after it is not glued on.
+                    maxLines: 5,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -232,6 +259,35 @@ class _AddHostScreenState extends ConsumerState<AddHostScreen> {
                     ),
                   ),
                 ],
+                if (_pairError != null && !_busy) ...[
+                  const SizedBox(height: 16),
+                  Semantics(
+                    liveRegion: true,
+                    child: Container(
+                      key: const ValueKey('relay-pair-error'),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(color: AppColors.dangerBg, borderRadius: BorderRadius.circular(12)),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.error_outline, size: 18, color: AppColors.danger),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('No se pudo emparejar', style: AppFonts.inter(size: 14, weight: FontWeight.w600)),
+                                const SizedBox(height: 2),
+                                Text(_pairError!, style: AppFonts.inter(size: 13, color: AppColors.secondary, height: 1.4)),
+                                if (_pairHint != null) ...[const SizedBox(height: 6), Text(_pairHint!, style: AppText.caption)],
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -244,7 +300,7 @@ class _AddHostScreenState extends ConsumerState<AddHostScreen> {
               label: switch (_phase) {
                 RelayPairPhase.connecting => 'Conectando…',
                 RelayPairPhase.waitingApproval => 'Esperando aprobación…',
-                null => 'Emparejar',
+                null => _pairError != null ? 'Reintentar' : 'Emparejar',
               },
               height: 52,
               radius: 14,

@@ -539,6 +539,21 @@ String describeConnectError(Object e) {
   return 'Error de conexión';
 }
 
+/// What to do (Spanish) about a failed relay pairing, when there is
+/// something specific to say.
+String? pairErrorHint(Object e) {
+  if (e is InviteFormatError) return 'Copia el enlace completo agentd://relay?… que imprime agentd relay invite, o escanea su QR.';
+  if (e is! RelayError) return null;
+  return switch (e.failure) {
+    RelayFailure.hostOffline =>
+      'La invitación no sirve hasta que el host enlace con el relay. En el host: agentd relay status (¿falta el token de alta en el servicio?). Después reintenta con el mismo enlace.',
+    RelayFailure.hostNoAnswer => 'El host está enlazado pero no contestó. Comprueba que agentd relay invite sigue esperando y reintenta.',
+    RelayFailure.handshake => 'Crea una invitación nueva en el host con agentd relay invite.',
+    RelayFailure.unreachable => 'Comprueba la conexión del móvil y la dirección del relay.',
+    _ => null,
+  };
+}
+
 /// Secure-store slot of a relay device key (X25519 private, base64url).
 String relayKeySlot(String keyId) => 'agentd.relay.key.$keyId';
 

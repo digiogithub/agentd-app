@@ -145,8 +145,9 @@ class FakeHostsRepository implements HostsRepository {
 
   @override
   Future<HostConfig> pairRelay(String link, {required String deviceName, void Function(RelayPairPhase phase)? onPhase}) async {
-    final u = Uri.tryParse(link.trim());
-    if (u == null || u.scheme != 'agentd' || u.host != 'relay') throw const FormatException('not an agentd relay link');
+    final found = relayLinkCandidates(link);
+    final u = found.isEmpty ? null : Uri.tryParse(found.first);
+    if (u == null) throw const FormatException('not an agentd relay link');
     onPhase?.call(RelayPairPhase.connecting);
     final err = pairError;
     if (err != null) throw err;
