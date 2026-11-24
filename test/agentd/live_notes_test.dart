@@ -88,4 +88,11 @@ void main() {
     expect(mine.last.removed, isTrue);
     expect(mine.every((e) => e.session == null), isTrue);
   });
+
+  test('relay devices on the socket: a list (empty without paired devices), unknown device refused', skip: skip, () async {
+    final c = client();
+    final list = await c.relayDevices();
+    expect(list, isA<List<AgentdRelayDevice>>());
+    await expectLater(c.relayRevoke('dnosuchdevice'), throwsA(isA<AgentdError>().having((e) => e.code, 'code', 'not_found')));
+  });
 }

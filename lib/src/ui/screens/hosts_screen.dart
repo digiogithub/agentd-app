@@ -8,6 +8,7 @@ import '../format.dart';
 import '../providers.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'devices_screen.dart' show scopeLabel;
 import 'add_host_screen.dart';
 import 'provision_screen.dart';
 
@@ -76,7 +77,7 @@ class HostCard extends ConsumerWidget {
         title: Text('¿Quitar ${host.config.name}?', style: AppFonts.inter(size: 18, weight: FontWeight.w600)),
         content: Text(
           host.config.isRelay
-              ? 'Se borra de la app junto con la clave de este dispositivo. En el host sigue emparejado hasta que lo revoques con agentd relay devices revoke.'
+              ? 'Se borra de la app junto con la clave de este dispositivo. En el host sigue emparejado hasta que lo revoques: Ajustes > Dispositivos, o agentd relay revoke en el host.'
               : 'Se borra de la app; el host no se toca.',
           style: AppText.body,
         ),
@@ -172,7 +173,7 @@ class HostCard extends ConsumerWidget {
     final tags = <Widget>[
       if (relay != null) ...[
         TagChip('relay', bg: AppColors.accentBg, fg: AppColors.accentLight),
-        TagChip(_scopeLabel(relay.scope)),
+        TagChip(scopeLabel(relay.scope)),
         if (relay.sessions.isNotEmpty) TagChip('solo ${relay.sessions.join(', ')}'),
       ] else if (hasAgentd)
         TagChip('agentd ${caps!.tools['agentd']?.version ?? ''}'.trim(), bg: AppColors.accentBg, fg: AppColors.accentLight),
@@ -250,9 +251,3 @@ class HostCard extends ConsumerWidget {
   }
 }
 
-/// Spanish label of a relay device scope.
-String _scopeLabel(RelayScope s) => switch (s) {
-  RelayScope.view => 'solo ver',
-  RelayScope.operate => 'operar',
-  RelayScope.admin => 'admin',
-};

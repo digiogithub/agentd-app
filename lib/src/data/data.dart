@@ -6,6 +6,7 @@ import '../provision/provision.dart';
 import '../transport/transport.dart';
 import 'agentd_clients.dart';
 import 'board_repository.dart';
+import 'devices_repository.dart';
 import 'host_store.dart';
 import 'hosts_repository.dart';
 import 'mail_repository.dart';
@@ -14,6 +15,7 @@ import 'sessions_repository.dart';
 export 'agentd_clients.dart';
 export 'authorized_keys.dart';
 export 'board_repository.dart';
+export 'devices_repository.dart';
 export 'host_store.dart';
 export 'hosts_repository.dart';
 export 'mail_repository.dart';
@@ -22,7 +24,7 @@ export 'shell_session.dart';
 
 /// Everything the app needs, built once at start.
 class AppData {
-  AppData({required this.hosts, required this.sessions, required this.mail, required this.board, required this.provision, required this.hostKeyPrompts, required this.clients});
+  AppData({required this.hosts, required this.sessions, required this.mail, required this.board, required this.devices, required this.provision, required this.hostKeyPrompts, required this.clients});
 
   /// Production wiring: secure storage for keys, shared_preferences for
   /// hosts and trusted host keys, dartssh2 connections.
@@ -42,6 +44,7 @@ class AppData {
       sessions: LiveSessionsRepository(hosts: hosts, clients: clients),
       mail: AgentdMailRepository(clients: clients),
       board: LiveBoardRepository(hosts: hosts, clients: clients),
+      devices: AgentdDevicesRepository(hosts: hosts, clients: clients),
       provision: provision,
       hostKeyPrompts: prompts,
       clients: clients,
@@ -52,6 +55,7 @@ class AppData {
   final SessionsRepository sessions;
   final MailRepository mail;
   final BoardRepository board;
+  final DevicesRepository devices;
   final ProvisionService provision;
   final HostKeyPrompts hostKeyPrompts;
   final AgentdClients clients;

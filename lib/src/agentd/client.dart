@@ -338,6 +338,21 @@ class AgentdClient {
     await _callMap('note_assign', {'id': id, 'session': session, if (inProgress) 'status': 'in_progress', if (!notify) 'notify': false}),
   );
 
+  // ---- Relay devices ----
+
+  /// The devices paired with this host through its relay (op `relay`, action
+  /// `devices`). A human on the socket and an owner admin relay device get
+  /// all of them; any other relay device only its own entry.
+  Future<List<AgentdRelayDevice>> relayDevices() async {
+    final r = await _callMap('relay', {'action': 'devices'});
+    return [for (final d in r['devices'] is List ? r['devices'] as List : const []) AgentdRelayDevice.fromJson(jsonMap(d))];
+  }
+
+  /// Revokes device [device] (its id). A relay device may always revoke
+  /// itself (its tunnel closes right after the answer); revoking another one
+  /// needs a human or an owner admin device (`forbidden` otherwise).
+  Future<void> relayRevoke(String device) => call('relay', {'action': 'revoke', 'device': device});
+
   // ---- Streams ----
 
   /// Opens a resilient event subscription (see [AgentdSubscription]).

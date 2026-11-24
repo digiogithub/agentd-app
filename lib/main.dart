@@ -35,6 +35,7 @@ Widget buildApp({AppData? data, SettingsStore? settingsStore, AppSettings? setti
       sessionsRepositoryProvider.overrideWithValue(data.sessions),
       mailRepositoryProvider.overrideWithValue(data.mail),
       boardRepositoryProvider.overrideWithValue(data.board),
+      devicesRepositoryProvider.overrideWithValue(data.devices),
       provisionServiceProvider.overrideWithValue(data.provision),
       hostKeyPromptsProvider.overrideWithValue(data.hostKeyPrompts),
       if (Platform.isAndroid) backgroundBridgeProvider.overrideWithValue(MethodChannelBackgroundBridge()),

@@ -1,14 +1,17 @@
-// Settings: notifications, muted sessions, security, appearance.
+// Settings: notifications, muted sessions, security, paired devices,
+// appearance.
 
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../core/contracts.dart';
 import '../providers.dart';
 import '../theme.dart';
 import '../widgets/chat_font_controls.dart';
 import '../widgets/common.dart';
 import '../widgets/dictation/dictation_providers.dart';
+import 'devices_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -49,6 +52,11 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(settingsProvider);
     final n = ref.read(settingsProvider.notifier);
+    // Connected hosts with an agentd: the ones whose paired devices can be read.
+    final agentdHosts = [
+      for (final h in ref.watch(hostsProvider).value ?? const <HostStatus>[])
+        if (h.state == HostState.online && h.capabilities?.agentdSocket != null) h,
+    ];
 
     Widget group(List<Widget> children, {EdgeInsets padding = EdgeInsets.zero}) => Container(
       padding: padding,
@@ -175,7 +183,6 @@ class SettingsScreen extends ConsumerWidget {
                 const SizedBox(height: 8),
                 group([
                   link('Claves SSH', '1 ed25519', () => _showKey(context, ref)),
-                  link('Dispositivos y tokens', 'revocar', () => showToast(context, 'Gestión de dispositivos: pendiente')),
                   Semantics(
                     container: true,
                     toggled: s.biometricApprove,
@@ -200,6 +207,27 @@ class SettingsScreen extends ConsumerWidget {
                     ),
                   ),
                 ]),
+                const SizedBox(height: 18),
+                const SectionLabel('Dispositivos'),
+                const SizedBox(height: 8),
+                if (agentdHosts.isEmpty)
+                  Text('Conecta un host con agentd para ver y revocar los dispositivos emparejados con él.', style: AppText.caption)
+                else ...[
+                  group([
+                    for (final (i, h) in agentdHosts.indexed)
+                      KeyedSubtree(
+                        key: ValueKey('devices-host-${h.config.id}'),
+                        child: link(
+                          h.config.name,
+                          h.config.isRelay ? (h.config.canManageDevices ? 'ver y revocar' : 'este dispositivo') : 'ver y revocar',
+                          () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => DevicesScreen(hostId: h.config.id))),
+                          divider: i < agentdHosts.length - 1,
+                        ),
+                      ),
+                  ]),
+                  const SizedBox(height: 8),
+                  Text('Quién puede entrar en cada host por agentd-relay. Revocar corta el acceso hasta emparejar de nuevo.', style: AppText.caption),
+                ],
                 const SizedBox(height: 18),
                 const SectionLabel('Dictado'),
                 const SizedBox(height: 8),

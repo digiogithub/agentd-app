@@ -13,6 +13,12 @@ String relativeTime(DateTime? t, {DateTime? now}) {
   return days == 1 ? 'hace 1 día' : 'hace $days días';
 }
 
+/// A day as `24/11/2026` (local time).
+String shortDate(DateTime t) {
+  final l = t.toLocal();
+  return '${l.day}/${l.month}/${l.year}';
+}
+
 /// "2 min", "40 s": how long a session has been in its state.
 String shortDuration(DateTime? t, {DateTime? now}) {
   if (t == null) return '';

@@ -163,7 +163,10 @@ class StubHosts implements HostsRepository {
   Future<String> publicKey() async => 'ssh-ed25519 AAAA test';
 
   @override
-  Future<void> remove(String hostId) async {}
+  Future<void> remove(String hostId) async => removed.add(hostId);
+
+  /// Hosts removed with [remove].
+  final List<String> removed = [];
 
   @override
   Future<void> save(HostConfig config) async {}

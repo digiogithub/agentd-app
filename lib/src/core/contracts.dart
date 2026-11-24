@@ -203,6 +203,11 @@ class HostConfig {
   /// sessions (the daemon answers `forbidden` to the others).
   bool get canBacklog => !isRelay || (canOperate && relay?.kind != 'guest' && (relay?.sessions.isEmpty ?? true));
 
+  /// May list and revoke every device paired with the host: a human on SSH,
+  /// or an owner relay device with the admin scope that is not limited to
+  /// some sessions. Any other relay device sees and revokes only itself.
+  bool get canManageDevices => !isRelay || (canAdmin && relay?.kind != 'guest' && (relay?.sessions.isEmpty ?? true));
+
   /// May start and terminate sessions (relay: admin).
   bool get canAdmin => !isRelay || relay?.scope == RelayScope.admin;
 
@@ -830,6 +835,79 @@ abstract class BoardRepository {
   /// through its mailbox. Returns a warning when the note was assigned but
   /// the notice could not be sent.
   Future<String?> assignNote(String hostId, int noteId, {required String session, bool inProgress = false});
+}
+
+// ---------------------------------------------------------------------------
+// Devices paired with a host through agentd-relay (phones, desktops).
+// ---------------------------------------------------------------------------
+
+/// A device that may reach the host through its relay.
+class PairedDevice {
+  const PairedDevice({
+    required this.id,
+    this.name = '',
+    this.platform = '',
+    this.scope = RelayScope.view,
+    this.sessions = const [],
+    this.guest = false,
+    this.createdAt,
+    this.expiresAt,
+    this.lastSeen,
+    this.online = false,
+    this.isThisDevice = false,
+  });
+  final String id;
+  final String name;
+
+  /// android | ios | linux | macos | windows ('' when unknown).
+  final String platform;
+  final RelayScope scope;
+
+  /// Session name globs the device is limited to (empty = all).
+  final List<String> sessions;
+  final bool guest;
+  final DateTime? createdAt;
+  final DateTime? expiresAt;
+  final DateTime? lastSeen;
+
+  /// Connected to the host right now.
+  final bool online;
+
+  /// The device is this app (relay hosts only).
+  final bool isThisDevice;
+}
+
+enum DevicesFailure {
+  /// This device may not do that (list, or revoke another device).
+  forbidden,
+
+  /// The device is not paired any more.
+  notFound,
+
+  /// The host is offline, has no agentd or its agentd is too old.
+  unavailable,
+}
+
+class DevicesException implements Exception {
+  const DevicesException(this.failure, [this.message = '']);
+  final DevicesFailure failure;
+  final String message;
+
+  @override
+  String toString() => 'DevicesException(${failure.name}): $message';
+}
+
+abstract class DevicesRepository {
+  /// The devices paired with [hostId]. Over SSH, and for a relay device that
+  /// [HostConfig.canManageDevices], all of them; otherwise only this device.
+  /// Throws [DevicesException].
+  Future<List<PairedDevice>> devices(String hostId);
+
+  /// Revokes [deviceId]: it can not connect again until it is paired with a
+  /// new invite. Revoking this device ([PairedDevice.isThisDevice]) also
+  /// removes the host from the app, since it is unreachable from then on.
+  /// Throws [DevicesException].
+  Future<void> revoke(String hostId, String deviceId);
 }
 
 enum ProvisionStep { download, verify, install, service, hcListener, mcp, cli }

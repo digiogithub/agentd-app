@@ -19,7 +19,10 @@ Stream<T> _replay<T>(T Function() current, Stream<void> changes) {
       c.add(current());
       sub = changes.listen((_) => c.add(current()));
     },
-    onCancel: () => sub?.cancel(),
+    // Not returned: `stream.first` waits for the future of onCancel.
+    onCancel: () {
+      sub?.cancel();
+    },
   );
   return c.stream;
 }
@@ -594,6 +597,81 @@ class FakeBoardRepository implements BoardRepository {
     final w = assignWarning;
     assignWarning = null;
     return w;
+  }
+}
+
+/// Devices of the sample hosts. A relay host lists this app first
+/// ([HostConfig.relay] device id); one that may not manage devices lists only
+/// itself, like the daemon.
+class FakeDevicesRepository implements DevicesRepository {
+  FakeDevicesRepository(this._hosts, {DateTime? now}) : _now = now ?? DateTime.now();
+
+  final HostsRepository _hosts;
+  final DateTime _now;
+  final Map<String, List<PairedDevice>> _devices = {};
+
+  /// Recorded revokes: `session` is the host, `arg` the device id.
+  final List<FakeCall> calls = [];
+
+  /// When set, [devices] / [revoke] fail with it.
+  Object? listError;
+  Object? revokeError;
+
+  Future<HostConfig?> _config(String hostId) async => (await _hosts.watch().first).where((h) => h.config.id == hostId).firstOrNull?.config;
+
+  List<PairedDevice> _seed(HostConfig? c) => [
+    if (c?.relay != null)
+      PairedDevice(id: c!.relay!.deviceId, name: 'Este móvil', platform: 'android', scope: c.relay!.scope, sessions: c.relay!.sessions, guest: c.relay!.kind == 'guest', createdAt: _now.subtract(const Duration(days: 3)), lastSeen: _now, online: true),
+    PairedDevice(id: 'dpixel0000001', name: 'Pixel de Ana', platform: 'android', scope: RelayScope.operate, createdAt: _now.subtract(const Duration(days: 20)), lastSeen: _now.subtract(const Duration(hours: 3))),
+    PairedDevice(id: 'dmacbook00001', name: 'MacBook', platform: 'macos', scope: RelayScope.admin, createdAt: _now.subtract(const Duration(days: 40)), lastSeen: _now.subtract(const Duration(minutes: 1)), online: true),
+    PairedDevice(
+      id: 'dinvitado0001',
+      name: 'iPad de visita',
+      platform: 'ios',
+      scope: RelayScope.view,
+      sessions: const ['claude@docs'],
+      guest: true,
+      createdAt: _now.subtract(const Duration(days: 1)),
+      expiresAt: _now.add(const Duration(days: 6)),
+    ),
+  ];
+
+  @override
+  Future<List<PairedDevice>> devices(String hostId) async {
+    if (listError != null) throw listError!;
+    final c = await _config(hostId);
+    final own = c?.relay?.deviceId;
+    final all = _devices[hostId] ??= _seed(c);
+    return [
+      for (final d in all)
+        if (c == null || c.canManageDevices || d.id == own)
+          PairedDevice(
+            id: d.id,
+            name: d.name,
+            platform: d.platform,
+            scope: d.scope,
+            sessions: d.sessions,
+            guest: d.guest,
+            createdAt: d.createdAt,
+            expiresAt: d.expiresAt,
+            lastSeen: d.lastSeen,
+            online: d.online,
+            isThisDevice: d.id == own,
+          ),
+    ];
+  }
+
+  @override
+  Future<void> revoke(String hostId, String deviceId) async {
+    calls.add(FakeCall('revoke', hostId, arg: deviceId));
+    if (revokeError != null) throw revokeError!;
+    final c = await _config(hostId);
+    final own = c?.relay?.deviceId;
+    if (c != null && !c.canManageDevices && deviceId != own) throw const DevicesException(DevicesFailure.forbidden);
+    final all = _devices[hostId] ??= _seed(c);
+    if (!all.any((d) => d.id == deviceId)) throw const DevicesException(DevicesFailure.notFound);
+    all.removeWhere((d) => d.id == deviceId);
+    if (deviceId == own) await _hosts.remove(hostId);
   }
 }
 

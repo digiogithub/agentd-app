@@ -7,6 +7,7 @@
 //     sessionsRepositoryProvider.overrideWithValue(data.sessions),
 //     mailRepositoryProvider.overrideWithValue(data.mail),
 //     boardRepositoryProvider.overrideWithValue(data.board),
+//     devicesRepositoryProvider.overrideWithValue(data.devices),
 //     provisionServiceProvider.overrideWithValue(data.provision),
 //     hostKeyPromptsProvider.overrideWithValue(data.hostKeyPrompts),
 //   ], child: const AgentdApp())
@@ -27,6 +28,7 @@ final sessionsRepositoryProvider = Provider<SessionsRepository>((ref) => FakeSes
 final mailRepositoryProvider = Provider<MailRepository>((ref) => FakeMailRepository());
 final boardRepositoryProvider = Provider<BoardRepository>((ref) => FakeBoardRepository());
 final provisionServiceProvider = Provider<ProvisionService>((ref) => FakeProvisionService());
+final devicesRepositoryProvider = Provider<DevicesRepository>((ref) => FakeDevicesRepository(ref.watch(hostsRepositoryProvider)));
 
 /// New host keys waiting for the user's decision (TOFU dialog, see app.dart).
 /// Android background connection + notifications (main.dart overrides it on
@@ -58,6 +60,14 @@ final queuesProvider = StreamProvider.family<List<WorkQueue>, String>((ref, host
 
 /// The work dashboard of one host (tasks and open questions of its agents).
 final boardProvider = StreamProvider.family<HostBoard, String>((ref, hostId) => ref.watch(boardRepositoryProvider).watch(hostId));
+
+/// The devices paired with a host (Ajustes > Dispositivos); read again every
+/// time the screen opens and after a revoke (`ref.invalidate`).
+/// No automatic retry: a failure is shown with its own "Reintentar".
+final devicesProvider = FutureProvider.autoDispose.family<List<PairedDevice>, String>(
+  (ref, hostId) => ref.watch(devicesRepositoryProvider).devices(hostId),
+  retry: (_, _) => null,
+);
 
 /// Host name by id ('' when unknown), for subtitles.
 /// The saved config of a host (null while unknown). Relay hosts carry their

@@ -664,6 +664,37 @@ class AgentdNoteAssignResult {
   final String? warning;
 }
 
+/// A device paired through the relay (`proto.RelayDeviceInfo`).
+class AgentdRelayDevice {
+  const AgentdRelayDevice({required this.id, this.name = '', this.platform = '', this.scope = '', this.sessions = const [], this.kind = '', this.createdAt, this.expiresAt, this.lastSeen, this.online = false});
+  factory AgentdRelayDevice.fromJson(Json j) => AgentdRelayDevice(
+    id: _str(j['id']),
+    name: _str(j['name']),
+    platform: _str(j['platform']),
+    scope: _str(j['scope']),
+    sessions: [for (final s in _list(j['sessions'])) _str(s)],
+    kind: _str(j['kind']),
+    createdAt: parseGoTime(j['created_at']),
+    expiresAt: parseGoTime(j['expires_at']),
+    lastSeen: parseGoTime(j['last_seen']),
+    online: _bool(j['online']),
+  );
+  final String id;
+  final String name;
+  final String platform;
+
+  /// view | operate | admin
+  final String scope;
+  final List<String> sessions;
+
+  /// owner | guest
+  final String kind;
+  final DateTime? createdAt;
+  final DateTime? expiresAt;
+  final DateTime? lastSeen;
+  final bool online;
+}
+
 /// One finished turn (`turns`, `turn.completed`).
 class AgentdTurn {
   const AgentdTurn({required this.turn, this.outcome = '', this.origin = '', this.status = '', this.message, this.startedAt, this.endedAt});

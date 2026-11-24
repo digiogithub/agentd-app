@@ -15,7 +15,7 @@ agentd-relay. Humans: see `README.md`. Architecture and decisions: `docs/plan.md
 | `lib/src/agentd/` | daemon wire protocol: `AgentdClient` (ops), events, attach, mapping to contracts |
 | `lib/src/mux/` | zellij and tmux adapters |
 | `lib/src/provision/` | host detection and installs |
-| `lib/src/data/` | real repositories (`AppData.create`): hosts, sessions, mail, board |
+| `lib/src/data/` | real repositories (`AppData.create`): hosts, sessions, mail, board (with backlog notes), devices |
 | `lib/src/ui/` | theme, providers, screens, widgets, `fakes/` (sample data of the mockups) |
 | `test/` | mirrors `lib/src/`; `test/agentd/fake_daemon.dart` is the fake daemon |
 | `docs/` | `plan.md` (architecture, per-feature notes), `signing.md` |

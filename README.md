@@ -127,3 +127,14 @@ AGENTD_RELAY_TEST_INVITE='agentd://relay?...' flutter test test/relay/ws_test.da
 
 (an invite from a throwaway daemon: `agentd relay invite --no-approve --scope admin`; the test
 starts and removes a `sh` session).
+
+## Paired devices
+
+Ajustes > **Dispositivos** lists the connected hosts that run agentd; each one opens the devices
+paired with it through agentd-relay (name, platform, scope, guest, session limits, last seen,
+connected). **Revocar** asks for confirmation and closes that device's access until it is paired
+again with a new invite. Over SSH every device is listed and revocable. Over the relay an owner
+device with the `admin` scope (not limited to some sessions) sees and revokes all of them; any
+other device sees only itself and may revoke only itself. Revoking the phone you are holding
+removes the host from the app (the dialog says so): pair it again with `agentd relay invite`.
+

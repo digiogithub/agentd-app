@@ -234,6 +234,29 @@ Protocol v1 and design live in agentd: `docs/plans/agentd/relay_plan.md` (normat
   `CAMERA` permission, camera feature not required, bundled ML Kit model (no Play Services download,
   a few MB more); iOS: `NSCameraUsageDescription`. The scanned text is a secret: never logged.
 
+## Paired devices (Ajustes > Dispositivos)
+
+2026-11-24, version 1.7.0; contract in agentd `docs/plans/agentd/backlog-notes_plan.md`, section
+"Relay devices".
+
+- **Wire**: op `relay {action: "devices"}` → `devices[]` (`AgentdRelayDevice`: id, name, platform,
+  scope, sessions, kind, created_at, expires_at, last_seen, online; invites are ignored) and
+  `relay {action: "revoke", device: <id>}`. Humans on the socket (SSH) and owner admin relay devices
+  that are not session-limited get every device; any other relay device gets its own entry and may
+  revoke only itself (`forbidden` otherwise).
+- **Contracts**: `PairedDevice` (`isThisDevice` = the id of `RelayHostInfo.deviceId`),
+  `DevicesRepository` (`devices`, `revoke`), `DevicesException`, `HostConfig.canManageDevices`.
+- **Data** (`data/devices_repository.dart`): this device first, then the connected ones, then by
+  name. A self revoke removes the host from the app after the daemon's answer (the daemon closes
+  the tunnel about 300 ms later and refuses the device from then on; `HostsRepository.remove`
+  also deletes the device key). A failed revoke keeps the host.
+- **UI**: `screens/devices_screen.dart`; a confirmation before every revoke, with its own text for
+  this device (access lost, host removed, pair again). `devicesProvider` has no automatic retry
+  (the error state has "Reintentar") and is invalidated after a revoke. The settings section lists
+  online hosts with an agentd socket.
+- **Tests**: `test/data/devices_repository_test.dart`, `test/ui/devices_screen_test.dart`,
+  and the devices case of `test/agentd/live_notes_test.dart`.
+
 ## Panel (work dashboard)
 
 Mobile side of the agentd work dashboard (agentd `docs/plans/agentd/dashboard_plan.md`, normative

@@ -22,6 +22,7 @@ class Fakes {
   final FakeSessionsRepository sessions;
   final FakeMailRepository mail;
   final FakeBoardRepository board;
+  late final FakeDevicesRepository devices = FakeDevicesRepository(hosts);
   final FakeProvisionService provision;
 
   List<Override> get overrides => [
@@ -29,6 +30,7 @@ class Fakes {
     sessionsRepositoryProvider.overrideWithValue(sessions),
     mailRepositoryProvider.overrideWithValue(mail),
     boardRepositoryProvider.overrideWithValue(board),
+    devicesRepositoryProvider.overrideWithValue(devices),
     provisionServiceProvider.overrideWithValue(provision),
   ];
 }
