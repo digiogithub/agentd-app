@@ -93,7 +93,8 @@ this screen yet.
 
 1. On the host: `[relay] enabled = true` and `url = "wss://relay.example"` in
    `~/.config/agentd/config.toml`, then `agentd relay invite [--scope view|operate|admin]`.
-2. On the phone: Hosts > + > **Invitación relay**, paste the `agentd://relay?...` link (or open
+2. On the phone: Hosts > + > **Invitación relay**, tap **Escanear QR** and point the camera at the
+   QR that `agentd relay invite` prints, or paste the `agentd://relay?...` link (or open
    it on the phone: Android and iOS register the `agentd://relay` link), give the device a name,
    **Emparejar**, and approve on the host (`Approve? [y/N]`).
    The link may be pasted as the terminal shows it: the `Link:` prefix, the text after it and

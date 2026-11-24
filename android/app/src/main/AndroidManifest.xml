@@ -2,6 +2,9 @@
     <!-- SSH to the hosts (release builds too; the debug manifest alone is not enough). -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <!-- QR scan of a relay invite (mobile_scanner). The camera is optional. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <!-- Dictation in the chat composer (speech_to_text). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <!-- Background connection: foreground service + its notification, and

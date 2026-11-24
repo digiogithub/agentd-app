@@ -14,11 +14,13 @@
 import '../platform/background.dart';
 import 'dart:convert';
 
+import 'package:flutter/widgets.dart' show BuildContext;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/contracts.dart';
 import 'fakes/fake_repositories.dart';
+import 'screens/qr_scan_screen.dart';
 
 final hostsRepositoryProvider = Provider<HostsRepository>((ref) => FakeHostsRepository());
 final sessionsRepositoryProvider = Provider<SessionsRepository>((ref) => FakeSessionsRepository());
@@ -34,6 +36,10 @@ final backgroundBridgeProvider = Provider<BackgroundBridge>((ref) => NoopBackgro
 /// Links that opened the app (app_links in main.dart; nothing in tests and
 /// on the fakes). `agentd://relay?...` opens Añadir host with the invite.
 final appLinksProvider = Provider<Stream<Uri>>((ref) => const Stream.empty());
+
+/// Opens the QR scanner and completes with the scanned invite text (null
+/// when closed). The camera screen by default; tests override it.
+final qrScannerProvider = Provider<Future<String?> Function(BuildContext context)>((ref) => QrScanScreen.open);
 
 final hostKeyPromptsProvider = Provider<HostKeyPrompts>((ref) => HostKeyPrompts());
 

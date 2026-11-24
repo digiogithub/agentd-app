@@ -20,7 +20,7 @@
 		<string>https</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>Hacer fotos para enviarlas a un agente.</string>
+	<string>Hacer fotos para enviarlas a un agente y escanear el QR de una invitación de agentd.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Elegir imágenes para enviarlas a un agente.</string>
 	<key>NSMicrophoneUsageDescription</key>

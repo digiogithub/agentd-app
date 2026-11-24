@@ -10,9 +10,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart' show ProviderScope;
 import 'package:agentd_app/src/ui/fakes/sample_data.dart';
 import 'package:agentd_app/src/ui/screens/add_host_screen.dart';
 import 'package:agentd_app/src/ui/screens/hosts_screen.dart';
+import 'package:agentd_app/src/ui/screens/qr_scan_screen.dart';
 import 'package:agentd_app/src/ui/screens/session_screen.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:mobile_scanner/mobile_scanner.dart' show MobileScannerErrorCode;
 
 import 'helpers.dart';
 
@@ -78,7 +80,6 @@ void main() {
     await pumpUi(tester, const AddHostScreen(), fakes: fakes, height: 1100);
     await tester.tap(find.text('Invitación relay'));
     await settle(tester);
-    expect(find.text('Escanear QR'), findsNothing);
     await tester.enterText(find.byKey(const ValueKey('relay-link')), 'https://example.com');
     await tester.tap(find.text('Emparejar'));
     await tester.pump();
@@ -96,6 +97,96 @@ void main() {
     await settle(tester);
     expect(fakes.hosts.relayPairings, 1);
     expect(fakes.hosts.hosts.firstWhere((h) => h.config.isRelay).config.name, 'box');
+  });
+
+  testWidgets('a scanned QR fills the invite and pairs like a pasted link', (tester) async {
+    final fakes = Fakes();
+    var scans = 0;
+    // What the camera reads is the link itself; here with a line break, as
+    // the pasted text may have.
+    Future<String?> scan(BuildContext _) async {
+      scans++;
+      return '${_link.substring(0, 80)}\n${_link.substring(80)}';
+    }
+
+    await pumpUi(tester, const AddHostScreen(), fakes: fakes, height: 1300, extraOverrides: [qrScannerProvider.overrideWithValue(scan)]);
+    // From the SSH form: the scan switches to the relay form.
+    await tester.tap(find.text('Escanear QR'));
+    await settle(tester);
+    expect(scans, 1);
+    expect(find.text('Enlace de invitación'), findsOneWidget);
+    expect(fakes.hosts.relayPairings, 0, reason: 'the device name is confirmed first');
+    await tester.tap(find.text('Emparejar'));
+    await settle(tester);
+    expect(fakes.hosts.relayPairings, 1);
+    expect(fakes.hosts.hosts.firstWhere((h) => h.config.isRelay).config.name, 'box');
+  });
+
+  testWidgets('a QR that is not an invite, or a closed scanner, changes nothing', (tester) async {
+    final fakes = Fakes();
+    String? result = 'https://example.com/qr';
+    await pumpUi(tester, const AddHostScreen(), fakes: fakes, height: 1300, extraOverrides: [qrScannerProvider.overrideWithValue((_) async => result)]);
+    await tester.tap(find.text('Invitación relay'));
+    await settle(tester);
+    await tester.tap(find.text('Escanear QR'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Ese QR no es una invitación de agentd'), findsOneWidget);
+    expect(tester.widget<TextField>(find.descendant(of: find.byKey(const ValueKey('relay-link')), matching: find.byType(TextField))).controller!.text, '');
+    result = null;
+    await settle(tester, frames: 80);
+    await tester.tap(find.text('Escanear QR'));
+    await settle(tester);
+    expect(tester.widget<TextField>(find.descendant(of: find.byKey(const ValueKey('relay-link')), matching: find.byType(TextField))).controller!.text, '');
+  });
+
+  testWidgets('scanner screen: ignores other codes, pops with the invite once', (tester) async {
+    late void Function(String) emit;
+    String? popped;
+    var pops = 0;
+    await pumpUi(
+      tester,
+      Builder(
+        builder: (context) => TextButton(
+          onPressed: () async {
+            popped = await Navigator.of(context).push<String>(
+              MaterialPageRoute<String>(
+                builder: (_) => QrScanScreen(
+                  preview: (_, onCode) {
+                    emit = onCode;
+                    return const SizedBox.expand();
+                  },
+                ),
+              ),
+            );
+            pops++;
+          },
+          child: const Text('open'),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await settle(tester);
+    expect(find.text('Escanear invitación'), findsOneWidget);
+    expect(find.textContaining('Apunta al QR'), findsOneWidget);
+    emit('WIFI:S:home;T:WPA;P:x;;');
+    await settle(tester);
+    expect(find.textContaining('no es una invitación de agentd'), findsOneWidget);
+    expect(pops, 0);
+    // The camera reports the same code on several frames.
+    emit(_link);
+    emit(_link);
+    await settle(tester, frames: 12);
+    expect(pops, 1);
+    expect(popped, _link);
+    expect(find.text('Escanear invitación'), findsNothing);
+  });
+
+  test('camera errors have a Spanish text that offers the paste', () {
+    for (final c in MobileScannerErrorCode.values) {
+      expect(describeScannerError(c), contains('enlace'));
+    }
+    expect(describeScannerError(MobileScannerErrorCode.permissionDenied), contains('permiso de cámara'));
   });
 
   testWidgets('host offline at the relay: explicit error that stays, and a retry', (tester) async {

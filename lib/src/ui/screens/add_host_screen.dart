@@ -129,6 +129,24 @@ class _AddHostScreenState extends ConsumerState<AddHostScreen> {
     });
   }
 
+  /// Scans the QR of `agentd relay invite`: the text goes into the invite
+  /// field, as a pasted link does.
+  Future<void> _scanLink() async {
+    final t = (await ref.read(qrScannerProvider)(context))?.trim() ?? '';
+    if (!mounted || t.isEmpty) return;
+    if (relayLinkCandidates(t).isEmpty) {
+      showToast(context, 'Ese QR no es una invitación de agentd');
+      return;
+    }
+    setState(() {
+      _transport = HostTransport.relay;
+      _link.text = t;
+      _pairError = null;
+      _pairHint = null;
+    });
+    // No toast: it would cover the Emparejar button the user taps next.
+  }
+
   Future<void> _pair() async {
     // The repository finds the link in the text (a "Link:" prefix, line
     // wraps of the terminal).
@@ -201,7 +219,7 @@ class _AddHostScreenState extends ConsumerState<AddHostScreen> {
                 _transportToggle(),
                 const SizedBox(height: 16),
                 Text(
-                  'Sin SSH ni puertos abiertos: el host y el móvil se encuentran en un relay (agentd-relay) con cifrado de extremo a extremo. En el host ejecuta agentd relay invite y pega aquí el enlace agentd://relay?…',
+                  'Sin SSH ni puertos abiertos: el host y el móvil se encuentran en un relay (agentd-relay) con cifrado de extremo a extremo. En el host ejecuta agentd relay invite y escanea el QR que muestra, o pega aquí el enlace agentd://relay?…',
                   style: AppFonts.inter(size: 13.5, color: AppColors.secondary, height: 1.45),
                 ),
                 const SizedBox(height: 16),
@@ -221,9 +239,13 @@ class _AddHostScreenState extends ConsumerState<AddHostScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: AppButton(label: 'Pegar del portapapeles', style: AppButtonStyle.outline, icon: Icons.content_paste, onPressed: _busy ? null : _pasteLink),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    AppButton(label: 'Escanear QR', style: AppButtonStyle.outline, icon: Icons.qr_code_scanner, onPressed: _busy ? null : _scanLink),
+                    AppButton(label: 'Pegar del portapapeles', style: AppButtonStyle.outline, icon: Icons.content_paste, onPressed: _busy ? null : _pasteLink),
+                  ],
                 ),
                 const SizedBox(height: 16),
                 LabeledField(
@@ -332,8 +354,8 @@ class _AddHostScreenState extends ConsumerState<AddHostScreen> {
                       child: _QuickTile(
                         icon: Icons.qr_code_scanner,
                         title: 'Escanear QR',
-                        sub: 'agentd serve pair',
-                        onTap: () => showToast(context, 'El escáner QR llegará pronto'),
+                        sub: 'agentd relay invite',
+                        onTap: _busy ? () {} : _scanLink,
                       ),
                     ),
                     const SizedBox(width: 8),

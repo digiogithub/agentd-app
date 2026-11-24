@@ -224,7 +224,15 @@ Protocol v1 and design live in agentd: `docs/plans/agentd/relay_plan.md` (normat
   (`test/ui/relay_ui_test.dart`). `AGENTD_RELAY_TEST_INVITE` runs a live test against a real relay
   + daemon (done on 2026-11-19 against the Go `agentd-relay` and daemon from the agentd working
   tree: pair, ping, run, ls, attach observe, kill, rm all passed).
-- Not done: QR scanning of the invite (paste or open the link).
+- **QR scan** (2026-11-24): "Escanear QR" in both forms of Añadir host opens
+  `screens/qr_scan_screen.dart` (`mobile_scanner`, QR format only). The screen ignores codes that
+  hold no `agentd://relay` link (it says so) and pops with the text of the first invite; the form
+  puts it in the invite field, so it follows the path of a pasted link (`relayLinkCandidates` +
+  `RelayInvite.parse`) and the user still confirms the device name before "Emparejar". The scanner
+  is behind `qrScannerProvider` (tests override it; `QrScanScreen.preview` replaces the camera).
+  Camera failures (permission denied, no camera) are a Spanish text that offers the paste. Android:
+  `CAMERA` permission, camera feature not required, bundled ML Kit model (no Play Services download,
+  a few MB more); iOS: `NSCameraUsageDescription`. The scanned text is a secret: never logged.
 
 ## Panel (work dashboard)
 

@@ -46,6 +46,10 @@ On machines with Sluice, run the checks through its `verify` tool instead of the
   the daemon enforces it.
 - Colors and fonts come from `ui/theme.dart` (`AppColors`, `AppFonts`, `AppText`); shared widgets
   from `ui/widgets/common.dart`. Touch targets are at least 44 px.
+- QR scanning uses `mobile_scanner` (maintained, Android + iOS, CameraX / AVFoundation, no
+  Firebase; Android keeps the bundled ML Kit barcode model so it works without Play Services).
+  Camera code stays in `ui/screens/qr_scan_screen.dart`, behind `qrScannerProvider`; tests never
+  open a camera.
 - Every feature has tests: wire against `FakeDaemon`, repositories against `StubHosts` +
   `DataShell`, screens with `pumpUi` on the fakes.
 - Update `README.md` and `docs/plan.md` in the same change.
