@@ -234,6 +234,30 @@ Map<String, Object?> taskJson(String id, String title, {String status = 'pending
 
 /// Answer of op board: one session with a plan and an open question, one
 /// without tasks.
+/// A backlog note as the daemon sends it (`proto.Note`).
+Map<String, Object?> noteJson(int id, String title, {String state = 'open', String? body, String? assignedTo}) => {
+  'id': id,
+  'title': title,
+  'body': ?body,
+  'state': state,
+  'assigned_to': ?assignedTo,
+  if (assignedTo != null) 'task_id': 'n$id',
+  'created_at': '2026-11-24T10:00:00Z',
+  'updated_at': '2026-11-24T10:00:00Z',
+  if (state != 'open') 'assigned_at': '2026-11-24T11:00:00Z',
+  if (state == 'done') 'done_at': '2026-11-23T09:00:00Z',
+};
+
+/// Answer of op notes: one open, one assigned, one done.
+Map<String, Object?> notesJson({String digest = 'd0123456789abcdef'}) => {
+  'notes': [
+    noteJson(3, 'Try the QR', body: 'On a real phone'),
+    noteJson(2, 'Docs', state: 'assigned', assignedTo: 'claude@webapp'),
+    noteJson(1, 'Old branches', state: 'done', assignedTo: 'codex@api'),
+  ],
+  'digest': digest,
+};
+
 Map<String, Object?> boardJson({String digest = 'b1', bool question = true}) => {
   'sessions': [
     {

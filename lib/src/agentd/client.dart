@@ -306,6 +306,38 @@ class AgentdClient {
   /// The task list of session [name] (agents write it; humans only read).
   Future<AgentdTasksResult> tasks(String name) async => AgentdTasksResult.fromJson(await _callMap('tasks', {'name': name}));
 
+  // ---- Backlog notes ----
+  // Humans, and owner relay devices with the operate scope that are not
+  // limited to some sessions. A daemon older than the backlog answers
+  // `invalid` (unknown op); one whose store is unavailable, `not_ready`.
+
+  /// The backlog: open notes first, then assigned, then done. [states]
+  /// filters (open | assigned | done). With [sinceDigest] still current the
+  /// answer is `notModified` + the digest.
+  Future<AgentdNotesResult> notes({List<String>? states, String? sinceDigest}) async =>
+      AgentdNotesResult.fromJson(await _callMap('notes', compactArgs({'states': states, 'since_digest': sinceDigest})));
+
+  /// Adds an open note. [title] 1..200 runes, [body] up to 4000.
+  Future<AgentdNote> noteAdd(String title, {String body = ''}) async =>
+      AgentdNote.fromJson(await _callMap('note_add', {'title': title, if (body.isNotEmpty) 'body': body}));
+
+  /// Edits note [id]: null fields are unchanged ([body] may be emptied).
+  /// [reopen] takes an assigned or done note back into the backlog (the
+  /// session's task is left alone).
+  Future<AgentdNote> noteUpdate(int id, {String? title, String? body, bool reopen = false}) async =>
+      AgentdNote.fromJson(await _callMap('note_update', {'id': id, 'title': ?title, 'body': ?body, if (reopen) 'state': 'open'}));
+
+  /// Deletes note [id] (the session's task, if any, stays).
+  Future<AgentdNote> noteRm(int id) async => AgentdNote.fromJson(await _callMap('note_rm', {'id': id}));
+
+  /// Makes note [id] a task (`n<id>`) of the running session [session],
+  /// pending or ([inProgress]) in progress. Unless [notify] is false the
+  /// session also gets a mailbox message with the note. A note that is done
+  /// is `invalid` (reopen it first); a full task list (50) too.
+  Future<AgentdNoteAssignResult> noteAssign(int id, String session, {bool inProgress = false, bool notify = true}) async => AgentdNoteAssignResult.fromJson(
+    await _callMap('note_assign', {'id': id, 'session': session, if (inProgress) 'status': 'in_progress', if (!notify) 'notify': false}),
+  );
+
   // ---- Streams ----
 
   /// Opens a resilient event subscription (see [AgentdSubscription]).

@@ -198,6 +198,11 @@ class HostConfig {
   /// May prompt, answer approvals, type in terminals (relay: operate+).
   bool get canOperate => !isRelay || (relay?.scope.index ?? 0) >= RelayScope.operate.index;
 
+  /// May read and write the host's backlog notes: a human on SSH, or an
+  /// owner relay device with the operate scope that is not limited to some
+  /// sessions (the daemon answers `forbidden` to the others).
+  bool get canBacklog => !isRelay || (canOperate && relay?.kind != 'guest' && (relay?.sessions.isEmpty ?? true));
+
   /// May start and terminate sessions (relay: admin).
   bool get canAdmin => !isRelay || relay?.scope == RelayScope.admin;
 
@@ -665,12 +670,68 @@ enum TaskStatus { pending, inProgress, blocked, done, cancelled }
 
 /// One item of an agent's plan. [title] and [note] are agent-written.
 class AgentTask {
-  const AgentTask({required this.id, required this.title, this.status = TaskStatus.pending, this.note, this.updatedAt});
+  const AgentTask({required this.id, required this.title, this.status = TaskStatus.pending, this.note, this.updatedAt, this.fromBacklog = false});
   final String id;
   final String title;
   final TaskStatus status;
   final String? note;
   final DateTime? updatedAt;
+
+  /// The human assigned it from the backlog (a [BacklogNote]).
+  final bool fromBacklog;
+}
+
+enum NoteState { open, assigned, done }
+
+/// A backlog note: something the human wrote down on a host to hand to an
+/// agent later. Assigned, it is task [taskId] of session [assignedTo]; it
+/// becomes done when the agent finishes that task.
+class BacklogNote {
+  const BacklogNote({required this.id, required this.title, this.body = '', this.state = NoteState.open, this.assignedTo, this.taskId, this.createdAt, this.updatedAt, this.assignedAt, this.doneAt});
+  final int id;
+  final String title;
+  final String body;
+  final NoteState state;
+  final String? assignedTo;
+  final String? taskId;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+  final DateTime? assignedAt;
+  final DateTime? doneAt;
+
+  /// Limits the daemon enforces (runes).
+  static const maxTitle = 200;
+  static const maxBody = 4000;
+}
+
+/// Why a backlog change was refused.
+enum BacklogFailure {
+  /// The daemon refused the values (blank or too long title, a note that is
+  /// done, a session whose task list is full).
+  invalid,
+
+  /// The note (or the session) no longer exists.
+  notFound,
+
+  /// The session is not running (exited or still starting).
+  sessionNotRunning,
+
+  /// This device may not use the backlog.
+  forbidden,
+
+  /// The host has no backlog (older agentd, store unavailable, offline).
+  unavailable,
+}
+
+class BacklogException implements Exception {
+  const BacklogException(this.failure, [this.message = '']);
+  final BacklogFailure failure;
+
+  /// The daemon's own words (English), for logs.
+  final String message;
+
+  @override
+  String toString() => 'BacklogException(${failure.name}): $message';
 }
 
 /// A question an agent asked the human through the mailbox, still open.
@@ -723,13 +784,24 @@ class BoardSession {
 /// The board of one host. [available] is false while the host has no
 /// reachable agentd or its daemon has no board (older than the dashboard).
 class HostBoard {
-  const HostBoard({required this.hostId, this.sessions = const [], this.unreadHuman = 0, this.available = true});
+  const HostBoard({required this.hostId, this.sessions = const [], this.unreadHuman = 0, this.available = true, this.notes = const [], this.backlog = false});
   final String hostId;
   final List<BoardSession> sessions;
 
   /// Unread messages of the user's mailbox.
   final int unreadHuman;
   final bool available;
+
+  /// The host's backlog: open notes first, then assigned, then done.
+  final List<BacklogNote> notes;
+
+  /// Whether the host has a backlog this device may use (false: an agentd
+  /// older than the backlog, a relay device without the right, no store).
+  /// The UI hides the section then.
+  final bool backlog;
+
+  HostBoard withBacklog(List<BacklogNote>? notes) =>
+      HostBoard(hostId: hostId, sessions: sessions, unreadHuman: unreadHuman, available: available, notes: notes ?? const [], backlog: notes != null);
 }
 
 abstract class BoardRepository {
@@ -740,6 +812,24 @@ abstract class BoardRepository {
   /// With [notify] false the reply is only recorded, not delivered to the
   /// agent: for an answer already typed in its prompt.
   Future<void> answer(String hostId, int questionId, String body, {bool notify = true});
+
+  // Backlog notes. Every change throws [BacklogException] when refused; the
+  // board of [watch] follows.
+
+  /// Adds an open note.
+  Future<BacklogNote> addNote(String hostId, {required String title, String body = ''});
+
+  /// Edits a note: null fields are unchanged. [reopen] takes an assigned or
+  /// done note back into the backlog (the agent's task is left alone).
+  Future<BacklogNote> updateNote(String hostId, int noteId, {String? title, String? body, bool reopen = false});
+
+  Future<void> removeNote(String hostId, int noteId);
+
+  /// Hands a note to the running session [session] of the same host as a
+  /// pending task, or one in progress with [inProgress]; the agent is told
+  /// through its mailbox. Returns a warning when the note was assigned but
+  /// the notice could not be sent.
+  Future<String?> assignNote(String hostId, int noteId, {required String session, bool inProgress = false});
 }
 
 enum ProvisionStep { download, verify, install, service, hcListener, mcp, cli }

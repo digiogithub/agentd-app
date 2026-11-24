@@ -288,6 +288,7 @@ class _TaskRow extends StatelessWidget {
               task.title,
               style: AppFonts.inter(size: 14, color: textColor, height: 1.4).copyWith(decoration: struck ? TextDecoration.lineThrough : null),
             ),
+            if (task.fromBacklog) ...[const SizedBox(height: 2), Text('Del backlog', style: AppFonts.inter(size: 12, color: AppColors.muted, height: 1.4))],
             for (final note in [task.note, extra])
               if (note != null && note.isNotEmpty) ...[
                 const SizedBox(height: 2),

@@ -1,6 +1,7 @@
 // Mapping from agentd wire models to the app contracts (core/contracts.dart).
 
 import '../core/contracts.dart';
+import 'errors.dart';
 import 'models.dart';
 
 /// Maps a daemon status word (view / ls `status`, or the process `state`
@@ -501,7 +502,33 @@ TaskStatus mapTaskStatus(String status) => switch (status) {
 };
 
 AgentTask toAgentTask(AgentdTask t) =>
-    AgentTask(id: t.id, title: t.title, status: mapTaskStatus(t.status), note: t.note, updatedAt: t.updatedAt);
+    AgentTask(id: t.id, title: t.title, status: mapTaskStatus(t.status), note: t.note, updatedAt: t.updatedAt, fromBacklog: t.origin == AgentdTask.originBacklog);
+
+BacklogNote toBacklogNote(AgentdNote n) => BacklogNote(
+  id: n.id,
+  title: n.title,
+  body: n.body,
+  state: switch (n.state) {
+    'assigned' => NoteState.assigned,
+    'done' => NoteState.done,
+    _ => NoteState.open,
+  },
+  assignedTo: n.assignedTo,
+  taskId: n.taskId,
+  createdAt: n.createdAt,
+  updatedAt: n.updatedAt,
+  assignedAt: n.assignedAt,
+  doneAt: n.doneAt,
+);
+
+/// A refused backlog op as the contract's exception.
+BacklogException toBacklogException(AgentdError e) => BacklogException(switch (e.code) {
+  AgentdErrorCode.notFound => BacklogFailure.notFound,
+  AgentdErrorCode.exited || AgentdErrorCode.starting => BacklogFailure.sessionNotRunning,
+  AgentdErrorCode.forbidden => BacklogFailure.forbidden,
+  AgentdErrorCode.notReady => BacklogFailure.unavailable,
+  _ => BacklogFailure.invalid,
+}, e.message);
 
 /// Answer of op board → HostBoard.
 HostBoard toHostBoard(AgentdBoard b, {required String hostId}) => HostBoard(

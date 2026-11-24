@@ -28,6 +28,7 @@ abstract final class EventKind {
   static const statusReported = 'status.reported';
   static const turnCompleted = 'turn.completed';
   static const taskChanged = 'task.changed';
+  static const noteChanged = 'note.changed';
   static const resync = 'resync';
   static const heartbeat = 'heartbeat';
   static const bye = 'bye';
@@ -140,6 +141,8 @@ sealed class AgentdEvent {
           current: jsonStrOrNull(d['current']),
           changed: [for (final c in d['changed'] is List ? d['changed'] as List : const []) AgentdTaskChange.fromJson(jsonMap(c))],
         );
+      case EventKind.noteChanged:
+        return NoteChangedEvent(seq: seq, epoch: epoch, time: time, data: data, id: jsonInt(d['id']), state: jsonStrOrNull(d['state']), removed: jsonBool(d['removed']));
       case EventKind.resync:
         return ResyncEvent(epoch: epoch, time: time, data: data, reason: jsonStr(d['reason']));
       case EventKind.heartbeat:
@@ -284,6 +287,17 @@ class TaskChangedEvent extends AgentdEvent {
 
   /// New and modified tasks (removed ones are not listed).
   final List<AgentdTaskChange> changed;
+}
+
+/// A backlog note was added, edited, assigned, completed or removed. Host
+/// wide (no session): only humans and owner relay devices get it.
+class NoteChangedEvent extends AgentdEvent {
+  const NoteChangedEvent({super.seq, super.epoch, super.time, super.data, required this.id, this.state, this.removed = false}) : super(kind: EventKind.noteChanged);
+  final int id;
+
+  /// open | assigned | done (absent when [removed]).
+  final String? state;
+  final bool removed;
 }
 
 /// Events were lost (reason overflow | since_seq_too_old | epoch_mismatch):

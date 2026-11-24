@@ -461,14 +461,21 @@ class AgentdQueueResult {
 
 /// One item of a session's plan (`proto.Task`). Agent-written text.
 class AgentdTask {
-  const AgentdTask({required this.id, required this.title, this.status = 'pending', this.note, this.updatedAt});
+  const AgentdTask({required this.id, required this.title, this.status = 'pending', this.note, this.updatedAt, this.origin});
   factory AgentdTask.fromJson(Json j) => AgentdTask(
     id: _str(j['id']),
     title: _str(j['title']),
     status: _strOrNull(j['status']) ?? 'pending',
     note: _strOrNull(j['note']),
     updatedAt: parseGoTime(j['updated_at']),
+    origin: _strOrNull(j['origin']),
   );
+
+  /// [origin] of a task the human assigned from the backlog.
+  static const originBacklog = 'backlog';
+
+  /// `backlog` for a task that came from a backlog note; null otherwise.
+  final String? origin;
   final String id;
   final String title;
 
@@ -594,6 +601,67 @@ class AgentdBoard {
   final int unreadHuman;
   final String digest;
   final bool notModified;
+}
+
+/// One backlog note (`proto.Note`): something the human wrote down on the
+/// host to assign to a session later.
+class AgentdNote {
+  const AgentdNote({required this.id, this.title = '', this.body = '', this.state = 'open', this.assignedTo, this.taskId, this.createdAt, this.updatedAt, this.assignedAt, this.doneAt});
+  factory AgentdNote.fromJson(Json j) => AgentdNote(
+    id: _int(j['id']),
+    title: _str(j['title']),
+    body: _str(j['body']),
+    state: _strOrNull(j['state']) ?? 'open',
+    assignedTo: _strOrNull(j['assigned_to']),
+    taskId: _strOrNull(j['task_id']),
+    createdAt: parseGoTime(j['created_at']),
+    updatedAt: parseGoTime(j['updated_at']),
+    assignedAt: parseGoTime(j['assigned_at']),
+    doneAt: parseGoTime(j['done_at']),
+  );
+  final int id;
+  final String title;
+  final String body;
+
+  /// open | assigned | done
+  final String state;
+  final String? assignedTo;
+  final String? taskId;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+  final DateTime? assignedAt;
+  final DateTime? doneAt;
+}
+
+/// Answer of `notes`. With `since_digest` still current: [notModified] and
+/// only the digest.
+class AgentdNotesResult {
+  const AgentdNotesResult({this.notes = const [], this.digest = '', this.notModified = false});
+  factory AgentdNotesResult.fromJson(Json j) => AgentdNotesResult(
+    notes: [for (final n in _list(j['notes'])) AgentdNote.fromJson(_map(n))],
+    digest: _str(j['digest']),
+    notModified: _bool(j['not_modified']),
+  );
+  final List<AgentdNote> notes;
+  final String digest;
+  final bool notModified;
+}
+
+/// Answer of `note_assign`: the note, the task created in the session and
+/// the notice sent to it. [warning] is set when the notice failed (the
+/// assignment stands).
+class AgentdNoteAssignResult {
+  const AgentdNoteAssignResult({required this.note, required this.task, this.messageId, this.warning});
+  factory AgentdNoteAssignResult.fromJson(Json j) => AgentdNoteAssignResult(
+    note: AgentdNote.fromJson(_map(j['note'])),
+    task: AgentdTask.fromJson(_map(j['task'])),
+    messageId: j['message_id'] == null ? null : _int(j['message_id']),
+    warning: _strOrNull(j['warning']),
+  );
+  final AgentdNote note;
+  final AgentdTask task;
+  final int? messageId;
+  final String? warning;
 }
 
 /// One finished turn (`turns`, `turn.completed`).

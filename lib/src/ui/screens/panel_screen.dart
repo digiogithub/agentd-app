@@ -13,6 +13,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/panel_widgets.dart';
 import 'panel_agent_screen.dart';
+import 'panel_backlog.dart';
 import 'panel_sheets.dart';
 import 'session_screen.dart';
 
@@ -147,6 +148,25 @@ class _PanelScreenState extends ConsumerState<PanelScreen> {
         children.add(const SizedBox(height: 10));
         children.add(_AgentCard(key: ValueKey('panel-agent-${a.key}'), session: a, hostName: hostOf(a.hostId), onTap: () => _openAgent(a.hostId, a.name)));
       }
+    }
+    // One backlog per host that has one for this device (an older agentd or
+    // a relay device without the right: no section).
+    final backlogs = [
+      for (final b in boards)
+        if (b.backlog && (host == null || b.hostId == host) && (ref.watch(hostConfigProvider(b.hostId))?.canBacklog ?? true)) b,
+    ];
+    final noAgents = children.isEmpty;
+    if (noAgents && backlogs.isNotEmpty) {
+      children.add(
+        Padding(
+          padding: const EdgeInsets.fromLTRB(2, 12, 2, 4),
+          child: Text('No hay agentes en marcha. Lanza uno desde «Agentes».', style: AppText.body.copyWith(color: AppColors.muted)),
+        ),
+      );
+    }
+    for (final b in backlogs) {
+      children.add(const SizedBox(height: 18));
+      children.add(BacklogSection(board: b, hostName: hostOf(b.hostId)));
     }
 
     return SafeArea(

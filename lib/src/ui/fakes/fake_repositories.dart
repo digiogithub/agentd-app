@@ -478,6 +478,8 @@ class FakeBoardRepository implements BoardRepository {
     _boards[hostId] = HostBoard(
       hostId: hostId,
       unreadHuman: b.unreadHuman,
+      notes: b.notes,
+      backlog: b.backlog,
       sessions: [
         for (final s in b.sessions)
           BoardSession(
@@ -493,6 +495,105 @@ class FakeBoardRepository implements BoardRepository {
       ],
     );
     _changes.add(null);
+  }
+
+  /// When set, every backlog change fails with it.
+  Object? noteError;
+
+  /// Warning returned by the next [assignNote].
+  String? assignWarning;
+
+  int _noteId = 100;
+
+  /// Replaces the notes of a host, like the daemon orders them.
+  void _setNotes(String hostId, List<BacklogNote> notes, {List<BoardSession>? sessions}) {
+    final b = _boards[hostId]!;
+    int rank(BacklogNote n) => n.state.index;
+    final sorted = [...notes]..sort((a, c) => rank(a) != rank(c) ? rank(a) - rank(c) : (c.updatedAt ?? DateTime(0)).compareTo(a.updatedAt ?? DateTime(0)));
+    _boards[hostId] = HostBoard(hostId: hostId, sessions: sessions ?? b.sessions, unreadHuman: b.unreadHuman, available: b.available, notes: sorted, backlog: true);
+    _changes.add(null);
+  }
+
+  HostBoard _backlogOf(String hostId, String method, int id, Object? arg) {
+    calls.add(FakeCall(method, '$id', arg: arg));
+    if (noteError != null) throw noteError!;
+    final b = _boards[hostId];
+    if (b == null || !b.backlog) throw const BacklogException(BacklogFailure.unavailable);
+    return b;
+  }
+
+  BacklogNote _note(HostBoard b, int id) => b.notes.where((n) => n.id == id).firstOrNull ?? (throw const BacklogException(BacklogFailure.notFound));
+
+  @override
+  Future<BacklogNote> addNote(String hostId, {required String title, String body = ''}) async {
+    final b = _backlogOf(hostId, 'addNote', 0, (title, body));
+    if (title.trim().isEmpty || title.runes.length > BacklogNote.maxTitle || body.runes.length > BacklogNote.maxBody) throw const BacklogException(BacklogFailure.invalid);
+    final now = DateTime.now();
+    final n = BacklogNote(id: ++_noteId, title: title.trim(), body: body, createdAt: now, updatedAt: now);
+    _setNotes(hostId, [n, ...b.notes]);
+    return n;
+  }
+
+  @override
+  Future<BacklogNote> updateNote(String hostId, int noteId, {String? title, String? body, bool reopen = false}) async {
+    final b = _backlogOf(hostId, 'updateNote', noteId, (title, body, reopen));
+    final old = _note(b, noteId);
+    if (title != null && title.trim().isEmpty) throw const BacklogException(BacklogFailure.invalid);
+    final n = BacklogNote(
+      id: old.id,
+      title: title?.trim() ?? old.title,
+      body: body ?? old.body,
+      state: reopen ? NoteState.open : old.state,
+      assignedTo: reopen ? null : old.assignedTo,
+      taskId: reopen ? null : old.taskId,
+      createdAt: old.createdAt,
+      updatedAt: DateTime.now(),
+      assignedAt: reopen ? null : old.assignedAt,
+      doneAt: reopen ? null : old.doneAt,
+    );
+    _setNotes(hostId, [for (final x in b.notes) x.id == noteId ? n : x]);
+    return n;
+  }
+
+  @override
+  Future<void> removeNote(String hostId, int noteId) async {
+    final b = _backlogOf(hostId, 'removeNote', noteId, null);
+    _note(b, noteId);
+    _setNotes(hostId, [for (final x in b.notes) if (x.id != noteId) x]);
+  }
+
+  @override
+  Future<String?> assignNote(String hostId, int noteId, {required String session, bool inProgress = false}) async {
+    final b = _backlogOf(hostId, 'assignNote', noteId, (session, inProgress));
+    final old = _note(b, noteId);
+    if (old.state == NoteState.done) throw const BacklogException(BacklogFailure.invalid);
+    if (!b.sessions.any((s) => s.name == session)) throw const BacklogException(BacklogFailure.notFound);
+    final now = DateTime.now();
+    final n = BacklogNote(id: old.id, title: old.title, body: old.body, state: NoteState.assigned, assignedTo: session, taskId: 'n${old.id}', createdAt: old.createdAt, updatedAt: now, assignedAt: now);
+    final task = AgentTask(id: 'n${old.id}', title: old.title, status: inProgress ? TaskStatus.inProgress : TaskStatus.pending, note: old.body.isEmpty ? null : old.body, updatedAt: now, fromBacklog: true);
+    // Like the daemon: the note is a task of the session's list.
+    _setNotes(
+      hostId,
+      [for (final x in b.notes) x.id == noteId ? n : x],
+      sessions: [
+        for (final s in b.sessions)
+          s.name != session
+              ? s
+              : BoardSession(
+                  hostId: s.hostId,
+                  name: s.name,
+                  status: s.status,
+                  attention: s.attention,
+                  turn: s.turn,
+                  preview: s.preview,
+                  tasks: [for (final t in s.tasks) if (t.id != task.id) t, task],
+                  questions: s.questions,
+                ),
+      ],
+    );
+    final w = assignWarning;
+    assignWarning = null;
+    return w;
   }
 }
 

@@ -70,6 +70,14 @@ work dashboard (op `board`, agentd 0.8.0 or later):
   cancelled tasks do not count) and the task in progress. Agents that reported no tasks show
   their status and last line.
 - Counters (te esperan, tasks in progress, tasks pending) and a host filter.
+- **Backlog** (one section per host, agentd with backlog notes): notes and future tasks you write
+  down on the host. **Añadir nota** takes a title and an optional detail; tapping a note edits,
+  deletes (after a confirmation) or reopens it. **Asignar** hands an open note to a running
+  agent of the same host as a *pendiente* or *en curso* task: the agent is told through its
+  mailbox, the task shows in its plan as "Del backlog", and the note becomes *hecha* when the
+  agent finishes it. Notes live in the daemon, so the desktop app and `agentd note` see the same
+  list. Hosts with an older agentd, and relay devices that are guests, view-only or limited to
+  some sessions, have no Backlog section.
 
 Answering without opening the session:
 
@@ -84,7 +92,7 @@ Answering without opening the session:
   hechas / canceladas, its open questions, and a message box to its mailbox or its prompt.
 
 Only agents write tasks (`agentd task ...`, MCP `agentd_tasks_set`): the app never adds or edits
-them. Hosts whose daemon has no board yet list their agentd sessions with status and preview.
+them (assigning a backlog note asks the daemon to add that one task). Hosts whose daemon has no board yet list their agentd sessions with status and preview.
 Relay devices follow their scope: `view` reads the Panel but can not answer or write; questions
 are only shown to owner devices (the daemon filters them). Push notifications are not part of
 this screen yet.

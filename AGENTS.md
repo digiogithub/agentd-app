@@ -62,3 +62,6 @@ On machines with Sluice, run the checks through its `verify` tool instead of the
 - Edit the agentd repository from here: ask its agent for daemon changes.
 - Add push / Firebase dependencies before the relay push stories (AGED-US-0047 / 0048).
 - Let the app write agent tasks: only agents do (`tasks_set` / `task_update` are session-only).
+  Assigning a backlog note (`note_assign`) is the one way a human adds a task, and the daemon does it.
+- Point `AGENTD_TEST_SOCKET` (live tests) at the user's daemon: only at a throwaway one with its
+  own `AGENTD_SOCKET`, `AGENTD_STATE_DIR` and `AGENTD_CONFIG`.

@@ -111,6 +111,128 @@ void main() {
     expect(d.lastArgs('reply'), {'id': 21, 'body': 'Same change', 'notify': false});
   });
 
+  group('backlog notes', () {
+    late Map<String, Object?> notes;
+    int notesCalls() => d.requests.where((r) => r['op'] == 'notes').length;
+    List<Object?> kinds() => d.lastArgs('subscribe')['kinds'] as List<Object?>;
+
+    setUp(() {
+      notes = notesJson(digest: 'dn1');
+      d.on('notes', (c) {
+        if (c.args['since_digest'] == notes['digest']) return c.ok({'digest': notes['digest'], 'not_modified': true});
+        c.ok(notes);
+      });
+    });
+
+    test('travel with the board; the subscription adds the note kind', () async {
+      final out = watch();
+      await eventually(() => out.isNotEmpty && bus != null);
+      final b = out.single;
+      expect((b.available, b.backlog, b.sessions.length), (true, true, 2));
+      expect(b.notes.map((n) => '${n.id}:${n.state.name}'), ['3:open', '2:assigned', '1:done']);
+      expect(kinds(), ['session', 'status', 'attention', 'mail', 'task', 'note']);
+    });
+
+    test('note.changed refreshes the notes alone; unchanged digests emit nothing', () async {
+      final out = watch();
+      await eventually(() => out.isNotEmpty && bus != null);
+      event('note.changed', data: {'id': 3, 'state': 'open'});
+      await eventually(() => notesCalls() == 2);
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+      expect(d.lastArgs('notes'), {'since_digest': 'dn1'});
+      expect(out.length, 1);
+
+      notes = {
+        'notes': [noteJson(3, 'Try the QR', state: 'assigned', assignedTo: 'codex@api')],
+        'digest': 'dn2',
+      };
+      event('note.changed', data: {'id': 3, 'state': 'assigned'});
+      await eventually(() => out.length == 2);
+      expect(out.last.notes.single.assignedTo, 'codex@api');
+      expect(out.last.sessions.length, 2, reason: 'the board itself was not modified and is kept');
+    });
+
+    test('an agentd older than the backlog: no section, the board still works, asked once', () async {
+      d.on('notes', (c) => c.fail('unknown op "notes"', code: 'invalid'));
+      final out = watch();
+      await eventually(() => out.isNotEmpty && bus != null);
+      expect((out.single.available, out.single.backlog, out.single.notes.length), (true, false, 0));
+      expect(kinds(), ['session', 'status', 'attention', 'mail', 'task'], reason: 'an older daemon refuses a kind it does not know');
+      board = boardJson(digest: 'b2', question: false);
+      event('task.changed', session: 'claude@webapp', data: {'revision': 2, 'counts': <String, Object?>{}, 'changed': <Object?>[]});
+      await eventually(() => out.length == 2);
+      expect(notesCalls(), 1);
+      await expectLater(repo.addNote('h', title: 'x'), throwsA(isA<BacklogException>().having((e) => e.failure, 'failure', BacklogFailure.unavailable)));
+    });
+
+    test('a store that is not ready is asked again, then the note kind is subscribed', () async {
+      d.on('notes', (c) => c.fail('backlog: store unavailable', code: 'not_ready'));
+      final out = watch();
+      await eventually(() => out.isNotEmpty && bus != null);
+      expect(out.single.backlog, isFalse);
+      d.on('notes', (c) => c.ok(notes));
+      event('status.changed', session: 'claude@webapp', data: {'status': 'idle'});
+      await eventually(() => out.length == 2);
+      expect((out.last.backlog, out.last.notes.length), (true, 3));
+      await eventually(() => d.requests.where((r) => r['op'] == 'subscribe').length == 2);
+      expect(kinds(), contains('note'));
+    });
+
+    test('a relay device that may not use the backlog never asks for it', () async {
+      for (final relay in [
+        const RelayHostInfo(relayUrl: 'https://r.example', route: 'r', hostKey: 'k', deviceId: 'd', scope: RelayScope.view, kind: 'owner'),
+        const RelayHostInfo(relayUrl: 'https://r.example', route: 'r', hostKey: 'k', deviceId: 'd', scope: RelayScope.admin, kind: 'guest'),
+        const RelayHostInfo(relayUrl: 'https://r.example', route: 'r', hostKey: 'k', deviceId: 'd', scope: RelayScope.admin, kind: 'owner', sessions: ['claude@*']),
+      ]) {
+        expect(HostConfig(id: 'x', name: 'x', host: 'r', user: '', transport: HostTransport.relay, relay: relay).canBacklog, isFalse);
+      }
+      const owner = RelayHostInfo(relayUrl: 'https://r.example', route: 'r', hostKey: 'k', deviceId: 'd', scope: RelayScope.operate, kind: 'owner');
+      expect(const HostConfig(id: 'x', name: 'x', host: 'r', user: '', transport: HostTransport.relay, relay: owner).canBacklog, isTrue);
+      expect(const HostConfig(id: 'x', name: 'x', host: 'h', user: 'u').canBacklog, isTrue);
+    });
+
+    test('changes send the op, refresh the board and map refusals', () async {
+      final out = watch();
+      await eventually(() => out.isNotEmpty && bus != null);
+      d.on('note_add', (c) {
+        notes = {
+          'notes': [noteJson(4, 'New idea', body: 'why'), ...(notes['notes'] as List)],
+          'digest': 'dn2',
+        };
+        c.ok(noteJson(4, 'New idea', body: 'why'));
+      });
+      final n = await repo.addNote('h', title: 'New idea', body: 'why');
+      expect((n.id, n.title, n.body, n.state), (4, 'New idea', 'why', NoteState.open));
+      expect(d.lastArgs('note_add'), {'title': 'New idea', 'body': 'why'});
+      await eventually(() => out.length == 2);
+      expect(out.last.notes.first.id, 4);
+
+      d.answer('note_update', noteJson(4, 'Newer idea'));
+      expect((await repo.updateNote('h', 4, title: 'Newer idea')).title, 'Newer idea');
+      expect(d.lastArgs('note_update'), {'id': 4, 'title': 'Newer idea'});
+      await repo.updateNote('h', 2, reopen: true);
+      expect(d.lastArgs('note_update'), {'id': 2, 'state': 'open'});
+
+      d.answer('note_assign', {
+        'note': noteJson(4, 'Newer idea', state: 'assigned', assignedTo: 'codex@api'),
+        'task': {...taskJson('n4', 'Newer idea', status: 'in_progress'), 'origin': 'backlog'},
+        'warning': 'mailbox: store closed',
+      });
+      expect(await repo.assignNote('h', 4, session: 'codex@api', inProgress: true), 'mailbox: store closed');
+      expect(d.lastArgs('note_assign'), {'id': 4, 'session': 'codex@api', 'status': 'in_progress'});
+
+      d.answer('note_rm', noteJson(4, 'Newer idea'));
+      await repo.removeNote('h', 4);
+      expect(d.lastArgs('note_rm'), {'id': 4});
+
+      for (final (code, failure) in [('exited', BacklogFailure.sessionNotRunning), ('invalid', BacklogFailure.invalid), ('not_found', BacklogFailure.notFound)]) {
+        d.on('note_assign', (c) => c.fail('refused', code: code));
+        await expectLater(repo.assignNote('h', 1, session: 's'), throwsA(isA<BacklogException>().having((e) => e.failure, 'failure', failure)));
+      }
+      await expectLater(repo.addNote('nope', title: 'x'), throwsA(isA<BacklogException>().having((e) => e.failure, 'failure', BacklogFailure.unavailable)));
+    });
+  });
+
   test('a daemon without the board is unavailable, and asked again later', () async {
     d.handlers.remove('board');
     final out = watch();

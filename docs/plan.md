@@ -264,6 +264,24 @@ https://claude.ai/artifact/187awNfuofy4KQZ2zYBLSG (Panel, answer sheet, agent ta
   prompt is then closed with `reply {notify: false}` (agentd AGED-US-0049: stored as delivered,
   never injected); if that reply fails (a daemon without `notify`) the prompt result is kept and
   a toast says the question is still open.
+- **Backlog notes** (2026-11-24; agentd `docs/plans/agentd/backlog-notes_plan.md`, normative;
+  version 1.6.0). Wire: ops `notes {states?, since_digest?}`, `note_add {title, body?}`,
+  `note_update {id, title?, body?, state?: "open"}`, `note_rm {id}`,
+  `note_assign {id, session, status?: in_progress, notify?: false}` (defaults are not sent), event
+  `note.changed` (`NoteChangedEvent`, no session), `Task.origin` (`AgentTask.fromBacklog`).
+  Contracts: `BacklogNote`, `NoteState`, `HostBoard.notes` / `backlog`, `BoardRepository.addNote /
+  updateNote / removeNote / assignNote`, `BacklogException` (`BacklogFailure`),
+  `HostConfig.canBacklog` (SSH, or an owner relay device with operate and no session globs).
+  Data: the notes travel with the board (`_fetchNotes`, their own digest) and never take it down:
+  `invalid` (an agentd before the backlog: unknown op) or `forbidden` = no section and not asked
+  again for that client; `not_ready` is asked again at the next refresh. The subscription adds the
+  `note` kind only after op notes answered (an older daemon refuses unknown kinds) and is reopened
+  when that changes. UI: `screens/panel_backlog.dart` (`BacklogSection` per host after "Agentes",
+  note sheet, assign sheet with the board's sessions of that host and Pendiente / En curso; done
+  notes behind "N notas hechas"). The app never writes tasks itself: `note_assign` makes the daemon
+  add the task. Tests: `test/agentd/notes_test.dart`, `test/data/board_repository_test.dart`
+  (group backlog notes), `test/ui/panel_backlog_test.dart`; `test/agentd/live_notes_test.dart` runs
+  against a throwaway daemon (`AGENTD_TEST_SOCKET`, passed on 2026-11-24 against agentd 8b9e817).
 - **Relay**: `board` and `tasks` are allowed to every scope; `canOperate` hides the answer
   controls for `view` devices; guests get no questions from the daemon.
 - **Fakes**: `sampleBoards` puts the mockup's plans on the sample sessions
