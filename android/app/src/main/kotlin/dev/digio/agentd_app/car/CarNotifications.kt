@@ -44,9 +44,35 @@ object CarNotifications {
         nm.createNotificationChannel(ch)
     }
 
+    /** Tag of a notification drawn from a daemon's data push. */
+    fun pushTag(sessionKey: String, reason: String) = "push/$sessionKey/$reason"
+
+    /**
+     * A data-only push of a daemon (agentd `[push] android_mode = "data"`):
+     * drawn here, with the same Reply / Mark as read, until the car engine
+     * posts its own (richer) notification for that session or the daemon
+     * says it is resolved.
+     */
+    fun postPush(ctx: Context, sessionKey: String, session: String, reason: String, title: String, body: String) {
+        val text = listOf(title, body).filter { it.isNotBlank() }.joinToString("\n").ifEmpty { session }
+        show(ctx, pushTag(sessionKey, reason), sessionKey, session, "", listOf(text to agent(sessionKey, session)))
+    }
+
+    /** Cancels the data-push notifications of [sessionKey] ([reason] null = every reason). */
+    fun cancelPush(ctx: Context, sessionKey: String, reason: String?) {
+        val prefix = if (reason == null) "push/$sessionKey/" else pushTag(sessionKey, reason)
+        val nm = ctx.getSystemService(NotificationManager::class.java)
+        for (n in nm.activeNotifications) {
+            val tag = n.tag ?: continue
+            if (n.id == ID && (if (reason == null) tag.startsWith(prefix) else tag == prefix)) nm.cancel(tag, ID)
+        }
+    }
+
     fun post(ctx: Context, m: Map<String, Any?>) {
         val tag = m["tag"] as? String ?: return
         val key = m["sessionKey"] as? String ?: return
+        // The car engine's notice replaces what a data push drew for this session.
+        cancelPush(ctx, key, null)
         val session = m["session"] as? String ?: key
         val host = m["host"] as? String ?: ""
         val text = m["text"] as? String ?: ""

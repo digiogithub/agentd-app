@@ -57,4 +57,7 @@ app id), not a server credential; it stays out of git anyway so that forks use t
 - Android: channel `agentd_attention` ("Decisiones pendientes", high importance) created in
   `MainActivity`, set as the FCM default channel in the manifest; Android 13+ asks for the
   notification permission the first time push is on.
+- Android data mode (agentd `[push] android_mode`, or `push_register {mode: "data"}` which the app
+  sends when the daemon lists `data` in `modes`): the app draws the notification itself (reply by voice,
+  Android Auto) and removes it on a `resolved` push. See `docs/android-auto.md`.
 - iOS: not configured yet (no `GoogleService-Info.plist`, no APNs key); the app runs without push there.

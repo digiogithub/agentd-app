@@ -1,6 +1,6 @@
 # Android Auto
 
-Added on 2026-11-25, version 1.10.0. Android only (iOS CarPlay is not done).
+Added on 2026-11-25, version 1.10.0; data-only pushes 1.11.0 (needs the agentd Android data mode). Android only (iOS CarPlay is not done).
 
 ## What the driver gets
 
@@ -44,13 +44,23 @@ Added on 2026-11-25, version 1.10.0. Android only (iOS CarPlay is not done).
 
 ## Pushes
 
-The daemons' FCM pushes are notification messages: Android shows them itself, without a reply
-action, so Android Auto ignores them. `AgentdPushReceiver` sees the same
-`com.google.android.c2dm.intent.RECEIVE` broadcast as firebase_messaging; when the phone is in the car
-(`CarConnection` projection or native) an agentd push (`v = 1`, `host_ref`) starts the car engine,
-which connects and posts its own messaging notification. The question text never goes through Google
-(it is read from the host). The phone also keeps the daemon's plain notification (follow-up: a data-only
-push mode in agentd would let the app draw a single notification).
+Two delivery modes (agentd `push-fcm_plan.md`, "Android data mode"):
+
+- **Data mode** (agentd with the Android data mode): `AgentdPushRepository.register` registers without
+  `mode` first (an older daemon rejects unknown fields); when the answer's `modes` lists `data` and the
+  effective `mode` is not `data`, it registers again with `mode: "data"` (Android only; a refusal keeps
+  the notification registration). The daemon then sends data-only messages (`title`, `body`, `tag` in
+  `data`). `AgentdPushReceiver` draws them as a messaging notification with Reply / Mark as read (tag
+  `push/<session key>/<reason>`), so the phone and the car show one notification that Assistant reads
+  and answers. A `reason: "resolved"` push cancels it (`resolves` = the earlier reason). While the car
+  engine runs it draws instead: its notice cancels the push notifications of that session.
+- **Notification mode** (older daemons, or iOS): Android draws the push itself, without a reply
+  action, so Android Auto ignores it.
+
+In both modes, while the phone is in the car (`CarConnection` projection or native), an agentd push
+(`v = 1`, `host_ref`) starts the car engine, which connects and posts its own notification with the
+full question and options. The question text never goes through Google unless the daemon has
+`include_preview`.
 
 ## Limits
 

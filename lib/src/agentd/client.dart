@@ -356,9 +356,9 @@ class AgentdClient {
   /// Registers an FCM [token] for push notifications (agentd 0.10.0); the
   /// daemon answers the registration id. [hostRef] comes back in the push
   /// data.
-  Future<String> pushRegister({required String token, required String platform, required String name, String? hostRef}) async {
-    final r = await _callMap('push_register', {'token': token, 'platform': platform, 'name': name, 'host_ref': ?hostRef});
-    return r['id'] is String ? r['id'] as String : '';
+  Future<AgentdPushRegistration> pushRegister({required String token, required String platform, required String name, String? hostRef, String? mode}) async {
+    final r = await _callMap('push_register', {'token': token, 'platform': platform, 'name': name, 'host_ref': ?hostRef, 'mode': ?mode});
+    return AgentdPushRegistration.fromJson(r);
   }
 
   /// Removes the registration of [token]; answers how many were removed.

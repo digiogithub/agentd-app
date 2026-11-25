@@ -11,11 +11,17 @@ import androidx.lifecycle.Observer
 /**
  * Sees every FCM message next to firebase_messaging's own receiver (same
  * `com.google.android.c2dm.intent.RECEIVE` broadcast, which it does not
- * consume). The daemons' pushes are notification messages that Android Auto
- * does not show (no reply action), so while the phone is in the car an
- * agentd push wakes the car engine: it reconnects and posts its messaging
- * notification for the question, which the car shows and reads aloud.
- * Nothing of the message is logged.
+ * consume). Nothing of the message is logged.
+ *
+ * - Data-only agentd pushes (daemon in Android data mode, agentd
+ *   `[push] android_mode = "data"` or the app's `push_register {mode: data}`):
+ *   drawn here as a messaging notification with Reply / Mark as read
+ *   (Android Auto shows it, Assistant reads and answers it); a `resolved`
+ *   push cancels it. With the car engine running, the engine draws instead.
+ * - Notification pushes (older daemons): Android draws them, Android Auto
+ *   ignores them.
+ * In both cases, while the phone is in the car, the push wakes the car
+ * engine, which reconnects and posts its own notification for the item.
  */
 class AgentdPushReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -23,6 +29,23 @@ class AgentdPushReceiver : BroadcastReceiver() {
         if (extras.getString("v") != "1" || extras.getString("host_ref").isNullOrEmpty()) return
         val app = context.applicationContext
         val main = Handler(Looper.getMainLooper())
+        val hostRef = extras.getString("host_ref")!!
+        val session = extras.getString("session") ?: return
+        val key = "$hostRef/agentd/$session"
+        val reason = extras.getString("reason") ?: ""
+        val system = extras.keySet().any { it.startsWith("gcm.notification.") || it.startsWith("gcm.n.") }
+        if (reason == "resolved") {
+            main.post {
+                CarNotifications.cancelPush(app, key, extras.getString("resolves"))
+                if (CarEngine.running) CarEngine.call("refresh", null)
+            }
+            return
+        }
+        if (!system && !CarEngine.running) {
+            val title = extras.getString("title") ?: ""
+            val body = extras.getString("body") ?: ""
+            main.post { CarNotifications.postPush(app, key, session, reason, title, body) }
+        }
         if (CarEngine.running) {
             main.post { CarEngine.call("refresh", null) }
             return

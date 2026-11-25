@@ -353,8 +353,10 @@ Added on 2026-11-25, version 1.10.0. Full notes: `docs/android-auto.md`.
   app closed. Channel `agentd/car`; Dart side `lib/src/car/` (`CarHub`, `CarBridge`, `car_text.dart`).
 - MessagingStyle notifications with Reply / Mark as read for open questions and menus; a voice reply
   answers the question, picks the menu option or becomes an instruction (`CarHub.reply`).
-- FCM pushes wake the car engine while in the car (`AgentdPushReceiver`); the daemon's plain push is
-  not shown by Android Auto. Follow-up: a data-only push mode in agentd.
+- FCM pushes wake the car engine while in the car (`AgentdPushReceiver`). Data-only pushes (agentd
+  Android data mode, 2026-11-25, version 1.11.0): the app registers with `mode: "data"` where the
+  daemon lists it in `modes`, draws the push itself with Reply / Mark as read, and cancels it on a
+  `resolved` push. Older daemons: notification pushes, which Android Auto does not show.
 - Not done: Assistant "send a message" by app name (needs App Actions / Play), CarPlay.
 - Tests: `test/car/` (matching, speech text, hub, bridge). Kotlin side checked by hand on the DHU.
 

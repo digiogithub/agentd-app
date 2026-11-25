@@ -23,6 +23,22 @@ DateTime? parseGoTime(Object? v) {
 }
 
 /// Answer of `ping`.
+/// Answer of `push_register`. [mode] (effective delivery: `notification` or
+/// `data`) and [modes] (what the daemon accepts) come from agentd with the
+/// Android data mode; older daemons send only [id].
+class AgentdPushRegistration {
+  const AgentdPushRegistration({required this.id, this.mode, this.modes = const []});
+  final String id;
+  final String? mode;
+  final List<String> modes;
+
+  factory AgentdPushRegistration.fromJson(Map<String, dynamic> j) => AgentdPushRegistration(
+        id: j['id'] is String ? j['id'] as String : '',
+        mode: j['mode'] is String ? j['mode'] as String : null,
+        modes: j['modes'] is List ? [for (final m in j['modes'] as List) if (m is String) m] : const [],
+      );
+}
+
 class AgentdPing {
   const AgentdPing({required this.version, required this.pid, required this.epoch});
   factory AgentdPing.fromJson(Json j) => AgentdPing(version: _str(j['version']), pid: _int(j['pid']), epoch: _str(j['epoch']));
