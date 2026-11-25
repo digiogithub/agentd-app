@@ -757,3 +757,27 @@ class FakeProvisionService implements ProvisionService {
     }
   }
 }
+
+/// Push registrations in memory (fakes, tests).
+class FakePushRepository implements PushRepository {
+  /// hostId → token registered there.
+  final Map<String, String> registered = {};
+  final List<String> calls = [];
+
+  /// Hosts that refuse (an older daemon, a guest device).
+  final Set<String> refusing = {};
+
+  @override
+  Future<bool> register(String hostId, {required String token, required String deviceName}) async {
+    calls.add('register $hostId');
+    if (refusing.contains(hostId)) return false;
+    registered[hostId] = token;
+    return true;
+  }
+
+  @override
+  Future<void> unregister(String hostId, {required String token}) async {
+    calls.add('unregister $hostId');
+    if (registered[hostId] == token) registered.remove(hostId);
+  }
+}

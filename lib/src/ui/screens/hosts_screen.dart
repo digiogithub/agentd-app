@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/contracts.dart';
 import '../format.dart';
 import '../providers.dart';
+import '../push_controller.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'devices_screen.dart' show scopeLabel;
@@ -71,6 +72,7 @@ class HostCard extends ConsumerWidget {
   final List<AgentSession> sessions;
 
   Future<void> _remove(BuildContext context, WidgetRef ref) async {
+    final push = PushScope.maybeOf(context);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -90,7 +92,10 @@ class HostCard extends ConsumerWidget {
         ],
       ),
     );
-    if (ok ?? false) await ref.read(hostsRepositoryProvider).remove(host.config.id);
+    if (!(ok ?? false)) return;
+    // The host stops pushing to this device before it is forgotten.
+    await push?.forget(host.config.id);
+    await ref.read(hostsRepositoryProvider).remove(host.config.id);
   }
 
   @override

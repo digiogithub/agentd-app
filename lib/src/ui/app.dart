@@ -8,6 +8,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../core/contracts.dart';
 import 'background_controller.dart';
+import 'push_controller.dart';
 import 'providers.dart';
 import 'screens/add_host_screen.dart';
 import 'screens/session_screen.dart';
@@ -39,9 +40,12 @@ class _AgentdAppState extends ConsumerState<AgentdApp>
       WidgetsBinding.instance.platformDispatcher.platformBrightness;
 
   late final BackgroundController _background;
+  late final PushController _push;
+  StreamSubscription<PushOpen>? _pushOpens;
   StreamSubscription<String>? _opens;
   StreamSubscription<Uri>? _links;
   final _navigator = GlobalKey<NavigatorState>();
+  final _shell = GlobalKey<AppShellState>();
 
   @override
   void initState() {
@@ -54,6 +58,14 @@ class _AgentdAppState extends ConsumerState<AgentdApp>
       settings: () => ref.read(settingsProvider),
     )..start();
     _opens = _background.opens.listen(_openSession);
+    _push = PushController(
+      hosts: ref.read(hostsRepositoryProvider),
+      push: ref.read(pushRepositoryProvider),
+      messaging: ref.read(pushMessagingProvider),
+      enabled: () => ref.read(settingsProvider).pushEnabled,
+    );
+    _pushOpens = _push.opens.listen(_openPush);
+    unawaited(_push.start());
     _links = ref.read(appLinksProvider).listen(_openLink, onError: (Object _) {});
     // First frame: nothing is built yet, so no repaint walk is needed.
     AppColors.palette = AppPalette.resolve(
@@ -67,6 +79,8 @@ class _AgentdAppState extends ConsumerState<AgentdApp>
     WidgetsBinding.instance.removeObserver(this);
     _opens?.cancel();
     _links?.cancel();
+    _pushOpens?.cancel();
+    unawaited(_push.dispose());
     unawaited(_background.dispose());
     super.dispose();
   }
@@ -89,6 +103,30 @@ class _AgentdAppState extends ConsumerState<AgentdApp>
     final nav = _navigator.currentState;
     if (s == null || nav == null) return;
     nav.push(MaterialPageRoute<void>(builder: (_) => SessionScreen(session: s)));
+  }
+
+  /// A tapped push: a question opens the Panel (its card is there), any
+  /// other reason the session's chat. The host may still be connecting
+  /// (cold start): wait a little for the session to show up.
+  Future<void> _openPush(PushOpen p) async {
+    if (p.reason == 'question') {
+      _navigator.currentState?.popUntil((r) => r.isFirst);
+      _shell.currentState?.select(0);
+      return;
+    }
+    final deadline = DateTime.now().add(const Duration(seconds: 20));
+    while (mounted) {
+      final s = ref.read(sessionsProvider).value?.where((x) => x.key == p.sessionKey).firstOrNull;
+      final nav = _navigator.currentState;
+      if (s != null && nav != null) {
+        nav.push(MaterialPageRoute<void>(builder: (_) => SessionScreen(session: s)));
+        return;
+      }
+      if (DateTime.now().isAfter(deadline)) break;
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
+    // Not found in time: at least show the Panel.
+    _shell.currentState?.select(0);
   }
 
   /// An `agentd://relay?...` invite opened from another app (or the camera):
@@ -136,6 +174,7 @@ class _AgentdAppState extends ConsumerState<AgentdApp>
   Widget build(BuildContext context) {
     ref.listen(settingsProvider.select((s) => s.theme), (_, t) => _apply(t));
     ref.listen(settingsProvider.select((s) => s.keepConnected), (_, _) => _background.settingsChanged());
+    ref.listen(settingsProvider.select((s) => s.pushEnabled), (_, _) => unawaited(_push.settingsChanged()));
     final p = AppColors.palette;
     final dark = p.brightness == Brightness.dark;
     final theme = buildAppTheme(p);
@@ -157,7 +196,7 @@ class _AgentdAppState extends ConsumerState<AgentdApp>
         darkTheme: theme,
         themeMode: dark ? ThemeMode.dark : ThemeMode.light,
         themeAnimationDuration: Duration.zero,
-        home: const AppShell(),
+        home: PushScope(controller: _push, child: AppShell(key: _shell)),
       ),
     );
   }
@@ -168,11 +207,16 @@ class AppShell extends ConsumerStatefulWidget {
   final int initialIndex;
 
   @override
-  ConsumerState<AppShell> createState() => _AppShellState();
+  ConsumerState<AppShell> createState() => AppShellState();
 }
 
-class _AppShellState extends ConsumerState<AppShell> {
+class AppShellState extends ConsumerState<AppShell> {
   late int _index = widget.initialIndex;
+
+  /// Shows tab [i] (0 = Panel).
+  void select(int i) {
+    if (mounted && i != _index) setState(() => _index = i);
+  }
   StreamSubscription<HostKeyPrompt>? _prompts;
 
   @override

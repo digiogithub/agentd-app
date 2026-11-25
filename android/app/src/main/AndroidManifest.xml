@@ -47,6 +47,14 @@
                 <data android:scheme="agentd" android:host="relay" />
             </intent-filter>
         </activity>
+        <!-- Push notifications from the hosts' daemons (FCM, agentd [push]):
+             they name channel agentd_attention, created in MainActivity. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="agentd_attention" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_agentd" />
         <!-- Keeps the SSH connections to the user's hosts open while the app is
              in the background (ConnectionService). specialUse: no other type
              fits a user-started remote shell connection. -->

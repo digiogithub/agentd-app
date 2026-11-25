@@ -6,6 +6,12 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Push notifications (FCM): android/app/google-services.json is gitignored
+// (see docs/push.md). Without it the app builds and runs without push.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 // Release signing: android/key.properties (gitignored; see docs/release.md).
 // Without it, release builds fall back to the debug key.
 val keystoreProperties = Properties().apply {

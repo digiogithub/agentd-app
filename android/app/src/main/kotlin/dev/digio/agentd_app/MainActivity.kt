@@ -28,10 +28,14 @@ class MainActivity : FlutterActivity() {
     companion object {
         const val EVENTS = "agentd_events"
         const val EXTRA_SESSION = "agentd_session"
+
+        /** Push notifications of the hosts' daemons (FCM, agentd [push]). */
+        const val ATTENTION = "agentd_attention"
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        createAttentionChannel()
         val ch = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "agentd/background")
         channel = ch
         ch.setMethodCallHandler { call, result ->
@@ -80,6 +84,16 @@ class MainActivity : FlutterActivity() {
         ConnectionService.onDisconnect = null
         if (isFinishing) stopService(Intent(this, ConnectionService::class.java))
         super.onDestroy()
+    }
+
+    /** The channel the daemons' pushes name; it must exist before one arrives. */
+    private fun createAttentionChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val nm = getSystemService(NotificationManager::class.java)
+        if (nm.getNotificationChannel(ATTENTION) != null) return
+        val ch = NotificationChannel(ATTENTION, "Decisiones pendientes", NotificationManager.IMPORTANCE_HIGH)
+        ch.description = "Un agente te pregunta o pide permiso (notificaciones push de los hosts)"
+        nm.createNotificationChannel(ch)
     }
 
     private fun requestNotifications(): Boolean {

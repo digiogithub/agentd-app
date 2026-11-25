@@ -353,6 +353,20 @@ class AgentdClient {
   /// needs a human or an owner admin device (`forbidden` otherwise).
   Future<void> relayRevoke(String device) => call('relay', {'action': 'revoke', 'device': device});
 
+  /// Registers an FCM [token] for push notifications (agentd 0.9.1); the
+  /// daemon answers the registration id. [hostRef] comes back in the push
+  /// data.
+  Future<String> pushRegister({required String token, required String platform, required String name, String? hostRef}) async {
+    final r = await _callMap('push_register', {'token': token, 'platform': platform, 'name': name, 'host_ref': ?hostRef});
+    return r['id'] is String ? r['id'] as String : '';
+  }
+
+  /// Removes the registration of [token]; answers how many were removed.
+  Future<int> pushUnregister({required String token}) async {
+    final r = await _callMap('push_unregister', {'token': token});
+    return r['removed'] is int ? r['removed'] as int : 0;
+  }
+
   // ---- Streams ----
 
   /// Opens a resilient event subscription (see [AgentdSubscription]).

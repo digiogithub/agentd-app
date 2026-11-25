@@ -18,7 +18,7 @@ agentd-relay. Humans: see `README.md`. Architecture and decisions: `docs/plan.md
 | `lib/src/data/` | real repositories (`AppData.create`): hosts, sessions, mail, board (with backlog notes), devices |
 | `lib/src/ui/` | theme, providers, screens, widgets, `fakes/` (sample data of the mockups) |
 | `test/` | mirrors `lib/src/`; `test/agentd/fake_daemon.dart` is the fake daemon |
-| `docs/` | `plan.md` (architecture, per-feature notes), `signing.md` |
+| `docs/` | `plan.md` (architecture, per-feature notes), `signing.md`, `push.md` (FCM, Firebase config) |
 
 ## Commands
 
@@ -60,7 +60,9 @@ On machines with Sluice, run the checks through its `verify` tool instead of the
 - Log keys, passwords, invite codes or prompt text.
 - Add desktop targets (the desktop client is a separate program in the agentd repository).
 - Edit the agentd repository from here: ask its agent for daemon changes.
-- Add push / Firebase dependencies before the relay push stories (AGED-US-0047 / 0048).
+- Commit `android/app/google-services.json`, `ios/Runner/GoogleService-Info.plist`,
+  `lib/firebase_options.dart` or any Firebase/FCM key; log the FCM token. Firebase is only
+  `firebase_core` + `firebase_messaging` for push (`docs/push.md`); tests use `NoopPushMessaging`.
 - Let the app write agent tasks: only agents do (`tasks_set` / `task_update` are session-only).
   Assigning a backlog note (`note_assign`) is the one way a human adds a task, and the daemon does it.
 - Point `AGENTD_TEST_SOCKET` (live tests) at the user's daemon: only at a throwaway one with its

@@ -49,3 +49,8 @@ app.*.map.json
 
 # Locally built installable artifacts
 /dist/
+
+# Firebase config of the user's own project (push): never committed, see docs/push.md
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+lib/firebase_options.dart

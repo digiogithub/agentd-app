@@ -96,8 +96,17 @@ Answering without opening the session:
 Only agents write tasks (`agentd task ...`, MCP `agentd_tasks_set`): the app never adds or edits
 them (assigning a backlog note asks the daemon to add that one task). Hosts whose daemon has no board yet list their agentd sessions with status and preview.
 Relay devices follow their scope: `view` reads the Panel but can not answer or write; questions
-are only shown to owner devices (the daemon filters them). Push notifications are not part of
-this screen yet.
+are only shown to owner devices (the daemon filters them).
+
+## Push notifications
+
+With the app closed or disconnected, a host can still tell the phone that an agent needs a
+decision: an `agentd ask` question to you, or a permission dialog. The daemon sends it through
+Firebase Cloud Messaging (agentd 0.9.1 or later with `[push]` enabled and a service account key on
+the host); tapping it opens the app on the Panel (question) or on that agent's chat (permission).
+The app registers itself on every agentd host it connects to; Ajustes > **Notificaciones push**
+turns it off. Builds without a Firebase config (`android/app/google-services.json`, not in git) run
+without push: see `docs/push.md`.
 
 ## Relay hosts
 

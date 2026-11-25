@@ -910,6 +910,53 @@ abstract class DevicesRepository {
   Future<void> revoke(String hostId, String deviceId);
 }
 
+/// What a tapped push notification points at (FCM data of the daemon's
+/// `[push]` tap, agentd 0.9.1 or later).
+class PushOpen {
+  const PushOpen({required this.hostId, required this.session, required this.reason, this.messageId});
+
+  /// The saved host id the app gave at `push_register` (`host_ref`).
+  final String hostId;
+  final String session;
+
+  /// `question`, `permission`, or one of the optional reasons (`waiting`,
+  /// `blocked`, `exited`, `turn_done`).
+  final String reason;
+  final int? messageId;
+
+  /// Reads the notification data; null when it is not an agentd push.
+  static PushOpen? fromData(Map<String, Object?> data) {
+    final host = data['host_ref'];
+    final session = data['session'];
+    if (data['v'] != '1' || host is! String || host.isEmpty || session is! String) return null;
+    final reason = data['reason'];
+    final id = data['message_id'];
+    return PushOpen(hostId: host, session: session, reason: reason is String ? reason : '', messageId: id is String ? int.tryParse(id) : (id is int ? id : null));
+  }
+
+  /// The session's key in the app ([AgentSession.key]).
+  String get sessionKey => '$hostId/${SessionSource.agentd.name}/$session';
+
+  @override
+  bool operator ==(Object other) => other is PushOpen && other.hostId == hostId && other.session == session && other.reason == reason && other.messageId == messageId;
+
+  @override
+  int get hashCode => Object.hash(hostId, session, reason, messageId);
+}
+
+/// Push registrations of this device on the hosts' daemons (ops
+/// `push_register` / `push_unregister`).
+abstract class PushRepository {
+  /// Registers [token] on [hostId] under [deviceName]; the daemon's push
+  /// data carries [hostId] back as `host_ref`. False when the host cannot
+  /// take it (offline, no agentd, a daemon without the op, not allowed):
+  /// never throws.
+  Future<bool> register(String hostId, {required String token, required String deviceName});
+
+  /// Removes [token] from [hostId]; best effort, never throws.
+  Future<void> unregister(String hostId, {required String token});
+}
+
 enum ProvisionStep { download, verify, install, service, hcListener, mcp, cli }
 
 class ProvisionEvent {

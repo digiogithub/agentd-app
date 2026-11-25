@@ -243,6 +243,13 @@ class SettingsScreen extends ConsumerWidget {
                 const SizedBox(height: 8),
                 group([
                   SwitchRow(
+                    key: const ValueKey('push-switch'),
+                    title: 'Notificaciones push',
+                    subtitle: 'Avisos del host con la app cerrada o desconectada: preguntas de los agentes y permisos que debes autorizar. Necesita agentd 0.9.1 con [push] activado en el host.',
+                    value: s.pushEnabled,
+                    onChanged: (v) => n.update((x) => x.copyWith(pushEnabled: v)),
+                  ),
+                  SwitchRow(
                     title: 'Mantener conexión en segundo plano',
                     subtitle: 'Notificación fija mientras haya un host conectado: la conexión y los avisos siguen con la app en segundo plano. Desde ella puedes desconectar.',
                     value: s.keepConnected,

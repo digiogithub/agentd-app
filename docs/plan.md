@@ -320,3 +320,25 @@ https://claude.ai/artifact/187awNfuofy4KQZ2zYBLSG (Panel, answer sheet, agent ta
   `test/data/board_repository_test.dart` (fake daemon), `test/ui/panel_screen_test.dart`.
 - Not done: push notifications (AGED-US-0047 / 0048, through agentd-relay), the unread mail
   count of the board (`HostBoard.unreadHuman` is carried but not drawn).
+
+## Push notifications (FCM)
+
+Added on 2026-11-25, version 1.9.0, against agentd `push-fcm_plan.md` (phase P5). Details and how the
+gitignored `google-services.json` is supplied: `docs/push.md`.
+
+- Decisions (José, 2026-11-25): each daemon sends to FCM itself (service account key on the host);
+  triggers = questions to the human + permission dialogs; no agent text in the payload by default;
+  the Firebase config stays out of git (public repo), CI gets it from a GitHub secret.
+- Contract: `PushOpen` (tap data: `host_ref`, `session`, `reason`, `message_id`), `PushRepository`
+  (`register` / `unregister`, never throw). Wire: `AgentdClient.pushRegister` / `pushUnregister`.
+- `PushController` (UI layer, started in `AgentdApp`): registration per online agentd host, cleared
+  when the host goes offline so a reconnect registers again; token refresh moves every registration;
+  the setting `pushEnabled` (default on) unregisters all when off; `PushScope.forget` before a host is
+  removed. A daemon without the op answers `invalid` and the host is simply left out.
+- Token API: the classic FCM registration token (`getToken` / `onTokenRefresh`, deprecated in
+  firebase_messaging 17 in favour of installation ids) because FCM HTTP v1 `message.token` takes it.
+- Taps: `question` = Panel tab; other reasons = that session's chat, waiting up to 20 s for the host
+  to connect after a cold start (then the Panel). Foreground pushes are not shown; they reconnect.
+- Tests: `test/data/push_repository_test.dart` (fake daemon), `test/ui/push_controller_test.dart`,
+  `test/ui/push_ui_test.dart` (app on the fakes). No Firebase in tests (`NoopPushMessaging` default).
+

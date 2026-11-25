@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'src/data/data.dart';
 import 'src/platform/background.dart';
+import 'src/platform/push.dart';
 import 'src/ui/app.dart';
 import 'src/ui/providers.dart';
 
@@ -36,6 +37,8 @@ Widget buildApp({AppData? data, SettingsStore? settingsStore, AppSettings? setti
       mailRepositoryProvider.overrideWithValue(data.mail),
       boardRepositoryProvider.overrideWithValue(data.board),
       devicesRepositoryProvider.overrideWithValue(data.devices),
+      pushRepositoryProvider.overrideWithValue(data.push),
+      if (Platform.isAndroid || Platform.isIOS) pushMessagingProvider.overrideWithValue(FirebasePushMessaging()),
       provisionServiceProvider.overrideWithValue(data.provision),
       hostKeyPromptsProvider.overrideWithValue(data.hostKeyPrompts),
       if (Platform.isAndroid) backgroundBridgeProvider.overrideWithValue(MethodChannelBackgroundBridge()),

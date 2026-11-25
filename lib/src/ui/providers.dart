@@ -13,6 +13,7 @@
 //   ], child: const AgentdApp())
 
 import '../platform/background.dart';
+import '../platform/push.dart';
 import 'dart:convert';
 
 import 'package:flutter/widgets.dart' show BuildContext;
@@ -42,6 +43,12 @@ final appLinksProvider = Provider<Stream<Uri>>((ref) => const Stream.empty());
 /// Opens the QR scanner and completes with the scanned invite text (null
 /// when closed). The camera screen by default; tests override it.
 final qrScannerProvider = Provider<Future<String?> Function(BuildContext context)>((ref) => QrScanScreen.open);
+
+/// Push notifications (FCM in main.dart; nothing in tests and on the fakes).
+final pushMessagingProvider = Provider<PushMessaging>((ref) => const NoopPushMessaging());
+
+/// Push registrations on the hosts' daemons.
+final pushRepositoryProvider = Provider<PushRepository>((ref) => FakePushRepository());
 
 final hostKeyPromptsProvider = Provider<HostKeyPrompts>((ref) => HostKeyPrompts());
 
@@ -111,6 +118,7 @@ class AppSettings {
     this.chatFont = ChatFont.sans,
     this.chatLineHeight = ChatLineHeight.normal,
     this.keepConnected = true,
+    this.pushEnabled = true,
   });
 
   final bool notifyWaiting;
@@ -136,6 +144,11 @@ class AppSettings {
   /// the background.
   final bool keepConnected;
 
+  /// Register this device for push notifications (FCM) on the hosts, so a
+  /// blocking agent question or permission reaches it while the app is
+  /// closed.
+  final bool pushEnabled;
+
   AppSettings copyWith({
     bool? notifyWaiting,
     bool? notifyTurnDone,
@@ -149,6 +162,7 @@ class AppSettings {
     ChatFont? chatFont,
     ChatLineHeight? chatLineHeight,
     bool? keepConnected,
+    bool? pushEnabled,
   }) => AppSettings(
     notifyWaiting: notifyWaiting ?? this.notifyWaiting,
     notifyTurnDone: notifyTurnDone ?? this.notifyTurnDone,
@@ -162,6 +176,7 @@ class AppSettings {
     chatFont: chatFont ?? this.chatFont,
     chatLineHeight: chatLineHeight ?? this.chatLineHeight,
     keepConnected: keepConnected ?? this.keepConnected,
+    pushEnabled: pushEnabled ?? this.pushEnabled,
   );
 }
 
@@ -217,6 +232,7 @@ extension AppSettingsJson on AppSettings {
     'chatFont': chatFont.name,
     'chatLineHeight': chatLineHeight.name,
     'keepConnected': keepConnected,
+    'pushEnabled': pushEnabled,
   };
 }
 
@@ -249,6 +265,7 @@ AppSettings appSettingsFromJson(Object? json, {AppSettings fallback = const AppS
     chatFont: chatFont,
     chatLineHeight: lineHeight,
     keepConnected: b('keepConnected', fallback.keepConnected),
+    pushEnabled: b('pushEnabled', fallback.pushEnabled),
   );
 }
 
