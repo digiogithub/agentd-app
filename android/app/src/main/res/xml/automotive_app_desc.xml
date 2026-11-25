@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Android Auto: a templated app (Car App Library, IoT category: the
-     messaging category is not listed for a sideloaded app) and a messaging
-     app through its notifications (shown and read by the car, voice reply). -->
+<!-- Android Auto: a templated app (Car App Library, IoT category). The
+     messaging notifications reach the car without `notification` here
+     (tested 2026-11-25); declaring it made the launcher icon open the phone
+     activity, which crashed Android Auto. -->
 <automotiveApp>
     <uses name="template" />
-    <uses name="notification" />
 </automotiveApp>
