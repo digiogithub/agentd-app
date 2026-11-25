@@ -30,6 +30,7 @@ void main() {
     });
 
     test('a leading number wins over the words after it', () {
+      expect(matchSpokenOption('1 si suena y vibra', const ['Suena y Panel OK', 'Suena, sin Panel', 'No suena']), 0);
       expect(matchSpokenOption('uno sí la veo', const ['Sí, la veo', 'No']), 0);
       expect(matchSpokenOption('dos, la de mantenimiento', const ['Migración en caliente', 'Ventana de mantenimiento']), 1);
     });

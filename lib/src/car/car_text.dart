@@ -142,7 +142,9 @@ int? matchSpokenOption(String spoken, List<String> options) {
   if (rest.isNotEmpty) {
     final n = int.tryParse(rest.first) ?? _ordinals[rest.first];
     if (n != null && rest.length == 1) return n >= 1 && n <= options.length ? n - 1 : null;
-    // A number followed by words of that same option ("uno, sí la veo").
+    // A digit first ("1 sí suena") names the option whatever follows.
+    if (int.tryParse(rest.first) case final d? when d >= 1 && d <= options.length) return d - 1;
+    // A number word followed by words of that same option ("uno, sí la veo").
     if (n != null && n >= 1 && n <= options.length && _hasWords(labels[n - 1], rest.skip(1).join(' '))) return n - 1;
   }
 
