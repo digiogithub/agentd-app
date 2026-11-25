@@ -71,3 +71,9 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Android Auto: templated car app (messaging category, ConversationItem
+    // needs car API level 7) and CarConnection.
+    implementation("androidx.car.app:app:1.7.0")
+}

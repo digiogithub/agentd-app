@@ -15,10 +15,12 @@ agentd-relay. Humans: see `README.md`. Architecture and decisions: `docs/plan.md
 | `lib/src/agentd/` | daemon wire protocol: `AgentdClient` (ops), events, attach, mapping to contracts |
 | `lib/src/mux/` | zellij and tmux adapters |
 | `lib/src/provision/` | host detection and installs |
+| `lib/src/car/` | Android Auto: `CarHub` (snapshot, voice reply, conclusion), `CarBridge` (channel `agentd/car`, engine body), text helpers |
+| `android/app/src/main/kotlin/.../car/` | Android Auto native side: headless `CarEngine`, car app service and screens, messaging notifications, push receiver |
 | `lib/src/data/` | real repositories (`AppData.create`): hosts, sessions, mail, board (with backlog notes), devices |
 | `lib/src/ui/` | theme, providers, screens, widgets, `fakes/` (sample data of the mockups) |
 | `test/` | mirrors `lib/src/`; `test/agentd/fake_daemon.dart` is the fake daemon |
-| `docs/` | `plan.md` (architecture, per-feature notes), `signing.md`, `push.md` (FCM, Firebase config) |
+| `docs/` | `plan.md` (architecture, per-feature notes), `signing.md`, `push.md` (FCM, Firebase config), `android-auto.md` |
 
 ## Commands
 
@@ -55,6 +57,9 @@ On machines with Sluice, run the checks through its `verify` tool instead of the
 - Update `README.md` and `docs/plan.md` in the same change.
 
 ## Do not
+
+- Put logic in the Kotlin car screens: decisions (option matching, routing a reply) live in
+  `lib/src/car/` where they are tested; Kotlin only draws the snapshot and forwards calls.
 
 - Run real agent CLIs (claude, codex, pando...) or installers in tests.
 - Log keys, passwords, invite codes or prompt text.

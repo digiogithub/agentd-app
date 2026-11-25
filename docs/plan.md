@@ -342,3 +342,19 @@ gitignored `google-services.json` is supplied: `docs/push.md`.
 - Tests: `test/data/push_repository_test.dart` (fake daemon), `test/ui/push_controller_test.dart`,
   `test/ui/push_ui_test.dart` (app on the fakes). No Firebase in tests (`NoopPushMessaging` default).
 
+## Android Auto
+
+Added on 2026-11-25, version 1.10.0. Full notes: `docs/android-auto.md`.
+
+- Templated car app (Car App Library 1.7.0, messaging category, car API 7): Panel (waiting
+  conversations, blocked tasks, agents), agent screen (conversation with dictated reply, option rows,
+  "Escuchar conclusión", "Últimas líneas"), text-to-speech through the car.
+- Headless Flutter engine (`CarEngine.kt`, entry point `carMain`) with its own `AppData`: works with the
+  app closed. Channel `agentd/car`; Dart side `lib/src/car/` (`CarHub`, `CarBridge`, `car_text.dart`).
+- MessagingStyle notifications with Reply / Mark as read for open questions and menus; a voice reply
+  answers the question, picks the menu option or becomes an instruction (`CarHub.reply`).
+- FCM pushes wake the car engine while in the car (`AgentdPushReceiver`); the daemon's plain push is
+  not shown by Android Auto. Follow-up: a data-only push mode in agentd.
+- Not done: Assistant "send a message" by app name (needs App Actions / Play), CarPlay.
+- Tests: `test/car/` (matching, speech text, hub, bridge). Kotlin side checked by hand on the DHU.
+

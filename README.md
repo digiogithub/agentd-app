@@ -108,6 +108,16 @@ The app registers itself on every agentd host it connects to; Ajustes > **Notifi
 turns it off. Builds without a Firebase config (`android/app/google-services.json`, not in git) run
 without push: see `docs/push.md`.
 
+## Android Auto
+
+The Panel on the car screen: agents waiting for a decision (listen and answer by voice), blocked
+tasks and the other agents; per agent, "Escuchar conclusión" (read aloud), "Últimas líneas" and a
+dictated instruction. Questions and permission menus also arrive as messaging notifications that
+Google Assistant reads and answers by voice ("dos", "sí", or the option's words; free words answer
+the question or go to the agent as an instruction). Works with the app closed (it has its own
+connection). Sideloaded builds need Android Auto's developer setting "Unknown sources". Details and
+a Desktop Head Unit test: `docs/android-auto.md`.
+
 ## Relay hosts
 
 1. On the host: `[relay] enabled = true` and `url = "wss://relay.example"` in

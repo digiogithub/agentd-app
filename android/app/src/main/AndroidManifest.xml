@@ -66,6 +66,34 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Keeps the user's SSH connections to their own hosts open in the background to receive notifications from the coding agents running there." />
         </service>
+        <!-- Android Auto (docs/android-auto.md): the Panel on the car screen
+             (Car App Library, messaging category), messaging notifications
+             with a dictated reply, and FCM pushes waking the car engine. -->
+        <service
+            android:name=".car.AgentdCarAppService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="androidx.car.app.CarAppService" />
+                <category android:name="androidx.car.app.category.MESSAGING" />
+            </intent-filter>
+        </service>
+        <meta-data
+            android:name="androidx.car.app.minCarApiLevel"
+            android:value="7" />
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
+        <receiver
+            android:name=".car.CarReplyReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".car.AgentdPushReceiver"
+            android:exported="true"
+            android:permission="com.google.android.c2dm.permission.SEND">
+            <intent-filter>
+                <action android:name="com.google.android.c2dm.intent.RECEIVE" />
+            </intent-filter>
+        </receiver>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

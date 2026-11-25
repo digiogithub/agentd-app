@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android Auto: a templated app (Car App Library, messaging category) whose
+     messaging notifications the car shows and Google Assistant reads. -->
+<automotiveApp>
+    <uses name="template" />
+    <uses name="notification" />
+</automotiveApp>

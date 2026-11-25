@@ -4,6 +4,7 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'src/car/car_bridge.dart';
 import 'src/data/data.dart';
 import 'src/platform/background.dart';
 import 'src/platform/push.dart';
@@ -23,6 +24,11 @@ Future<void> main() async {
   final store = PrefsSettingsStore();
   runApp(buildApp(data: AppData.create(), settingsStore: store, settings: await store.load()));
 }
+
+/// Entry point of the Android Auto engine (`CarEngine.kt`): a headless
+/// engine with its own repositories, alive while the phone is in the car.
+@pragma('vm:entry-point')
+Future<void> carMain() => runCarEngine();
 
 /// The app root: on [data] (real repositories), or on the fakes when null.
 /// [settingsStore] + [settings] persist the local settings (theme, mutes).

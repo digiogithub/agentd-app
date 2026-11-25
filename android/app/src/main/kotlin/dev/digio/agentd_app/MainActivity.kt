@@ -8,6 +8,9 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.car.app.connection.CarConnection
+import androidx.lifecycle.Observer
+import dev.digio.agentd_app.car.CarEngine
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -24,6 +27,14 @@ import io.flutter.plugin.common.MethodChannel
  */
 class MainActivity : FlutterActivity() {
     private var channel: MethodChannel? = null
+    private var car: CarConnection? = null
+
+    /** Android Auto connected while the app runs: start the car engine (its notifications). */
+    private val carObserver = Observer<Int> { type ->
+        if (type == CarConnection.CONNECTION_TYPE_PROJECTION || type == CarConnection.CONNECTION_TYPE_NATIVE) {
+            CarEngine.ensure(applicationContext)
+        }
+    }
 
     companion object {
         const val EVENTS = "agentd_events"
@@ -69,6 +80,7 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+        car = CarConnection(this).also { it.type.observeForever(carObserver) }
         ConnectionService.onDisconnect = { runOnUiThread { channel?.invokeMethod("disconnect", null) } }
         intent?.getStringExtra(EXTRA_SESSION)?.let { s -> ch.invokeMethod("open", s) }
     }
@@ -82,6 +94,8 @@ class MainActivity : FlutterActivity() {
         // The engine (and every SSH connection) goes with the activity: the
         // connection notification would lie.
         ConnectionService.onDisconnect = null
+        car?.type?.removeObserver(carObserver)
+        car = null
         if (isFinishing) stopService(Intent(this, ConnectionService::class.java))
         super.onDestroy()
     }
