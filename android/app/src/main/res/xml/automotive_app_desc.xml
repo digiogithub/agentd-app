@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Android Auto: a templated app (Car App Library, IoT category). The
-     messaging notifications reach the car without `notification` here
-     (tested 2026-11-25); declaring it made the launcher icon open the phone
-     activity, which crashed Android Auto. -->
+<!-- Android Auto: a templated messaging app (Car App Library, messaging
+     category: the Panel) whose MessagingStyle notifications the car shows
+     and Google Assistant reads. Both are needed: without `notification`
+     Android Auto drops the notifications (tested 2026-11-25 on the Desktop
+     Head Unit, Android Auto 18.2). -->
 <automotiveApp>
     <uses name="template" />
+    <uses name="notification" />
 </automotiveApp>

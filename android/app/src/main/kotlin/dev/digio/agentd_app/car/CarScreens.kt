@@ -22,8 +22,12 @@ import androidx.core.app.Person
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 
-/** Conversations (dictated replies on the car screen) need the messaging category. */
-private const val CONVERSATIONS = false
+/**
+ * Conversations (dictated replies on the car screen) need the messaging
+ * category, which this app declares (see the manifest). Without them the
+ * screens fall back to rows and a "Dictar instrucción" notification.
+ */
+private const val CONVERSATIONS = true
 
 /** A screen redrawn on every snapshot of the car engine while it is shown. */
 abstract class LiveCarScreen(ctx: CarContext, protected val speaker: CarSpeaker) : Screen(ctx) {
@@ -92,8 +96,8 @@ abstract class LiveCarScreen(ctx: CarContext, protected val speaker: CarSpeaker)
      * offers a dictated reply, sent as the car engine's `reply`.
      */
     protected fun conversation(agent: CarAgent, messages: List<String>, open: (() -> Unit)? = null): Item {
-        // ConversationItem is for messaging-category apps only; this app is
-        // IoT (see the manifest), so a row: tap = open the agent or hear it.
+        // Before car API 7 (or without conversations): a row, tap = open the
+        // agent or hear it.
         if (!CONVERSATIONS || !modern) {
             val last = messages.lastOrNull() ?: agent.preview ?: "Sin mensajes"
             return Row.Builder()
@@ -249,7 +253,7 @@ class AgentCarScreen(ctx: CarContext, speaker: CarSpeaker, private val key: Stri
                 }.build())
             }
         }
-        if (a.canOperate) {
+        if (a.canOperate && !(CONVERSATIONS && modern)) {
             items.add(Row.Builder().setTitle("Dictar instrucción").addText("Pulsa Responder en el aviso y habla").setOnClickListener {
                 // Templated IoT apps get no dictation: a messaging notification
                 // does (Reply = Google Assistant dictation, sent as `reply`).

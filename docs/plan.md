@@ -346,7 +346,8 @@ gitignored `google-services.json` is supplied: `docs/push.md`.
 
 Added on 2026-11-25, version 1.10.0. Full notes: `docs/android-auto.md`.
 
-- Templated car app (Car App Library 1.7.0, messaging category, car API 7): Panel (waiting
+- Templated car app (Car App Library 1.7.0, messaging category, `minCarApiLevel` 1; conversations
+  from car API 7; the declarations that work on Android Auto 18.2 are in `docs/android-auto.md`): Panel (waiting
   conversations, blocked tasks, agents), agent screen (conversation with dictated reply, option rows,
   "Escuchar conclusión", "Últimas líneas"), text-to-speech through the car.
 - Headless Flutter engine (`CarEngine.kt`, entry point `carMain`) with its own `AppData`: works with the
