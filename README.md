@@ -102,7 +102,7 @@ are only shown to owner devices (the daemon filters them).
 
 With the app closed or disconnected, a host can still tell the phone that an agent needs a
 decision: an `agentd ask` question to you, or a permission dialog. The daemon sends it through
-Firebase Cloud Messaging (agentd 0.9.1 or later with `[push]` enabled and a service account key on
+Firebase Cloud Messaging (agentd 0.10.0 or later with `[push]` enabled and a service account key on
 the host); tapping it opens the app on the Panel (question) or on that agent's chat (permission).
 The app registers itself on every agentd host it connects to; Ajustes > **Notificaciones push**
 turns it off. Builds without a Firebase config (`android/app/google-services.json`, not in git) run

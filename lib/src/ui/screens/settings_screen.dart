@@ -245,7 +245,7 @@ class SettingsScreen extends ConsumerWidget {
                   SwitchRow(
                     key: const ValueKey('push-switch'),
                     title: 'Notificaciones push',
-                    subtitle: 'Avisos del host con la app cerrada o desconectada: preguntas de los agentes y permisos que debes autorizar. Necesita agentd 0.9.1 con [push] activado en el host.',
+                    subtitle: 'Avisos del host con la app cerrada o desconectada: preguntas de los agentes y permisos que debes autorizar. Necesita agentd 0.10.0 con [push] activado en el host.',
                     value: s.pushEnabled,
                     onChanged: (v) => n.update((x) => x.copyWith(pushEnabled: v)),
                   ),

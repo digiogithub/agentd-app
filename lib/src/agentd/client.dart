@@ -353,7 +353,7 @@ class AgentdClient {
   /// needs a human or an owner admin device (`forbidden` otherwise).
   Future<void> relayRevoke(String device) => call('relay', {'action': 'revoke', 'device': device});
 
-  /// Registers an FCM [token] for push notifications (agentd 0.9.1); the
+  /// Registers an FCM [token] for push notifications (agentd 0.10.0); the
   /// daemon answers the registration id. [hostRef] comes back in the push
   /// data.
   Future<String> pushRegister({required String token, required String platform, required String name, String? hostRef}) async {

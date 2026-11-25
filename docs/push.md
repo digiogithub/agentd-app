@@ -1,6 +1,6 @@
 # Push notifications (FCM)
 
-The hosts' daemons send the pushes themselves (agentd 0.9.1, `[push]` in the daemon config, contract
+The hosts' daemons send the pushes themselves (agentd 0.10.0, `[push]` in the daemon config, contract
 in the agentd repository: `docs/plans/agentd/push-fcm_plan.md`). The app registers its FCM token on
 every agentd host it connects to and routes the taps. Only blocking items are pushed by default: an
 `agentd ask` question to the human and an agent permission dialog.

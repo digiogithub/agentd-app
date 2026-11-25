@@ -911,7 +911,7 @@ abstract class DevicesRepository {
 }
 
 /// What a tapped push notification points at (FCM data of the daemon's
-/// `[push]` tap, agentd 0.9.1 or later).
+/// `[push]` tap, agentd 0.10.0 or later).
 class PushOpen {
   const PushOpen({required this.hostId, required this.session, required this.reason, this.messageId});
 
