@@ -4,7 +4,14 @@ Added on 2026-11-25, version 1.10.0; data-only pushes 1.11.0 (needs the agentd A
 
 ## What the driver gets
 
-- **Car screen (templated app, Car App Library 1.7.0, messaging category, car API level 7+)**:
+- **Car screen (templated app, Car App Library 1.7.0, IoT category)**. Field test 2026-11-25 (Pixel 10,
+  current Android Auto): a sideloaded app in the messaging category is never listed as a templated
+  app; with `<uses name="notification"/>` it only showed as a notification-only message list, without
+  it not at all. Hence IoT (listed with "Unknown sources") plus `notification` for the messaging
+  notifications. `ConversationItem` belongs to the messaging category, so the car screen uses rows
+  (`CONVERSATIONS = false` in `CarScreens.kt`); dictation goes through a notification ("Dictar
+  instrucción" posts a `talk/<session key>` notice whose Reply is sent as `reply`). Headers from car
+  API 7, title + action strip before (`minCarApiLevel` 1):
   - **Panel**: "Esperan tu decisión" (one conversation per agent with an open `agentd ask` question or a
     terminal menu: the car reads it aloud and offers a dictated reply; "Abrir" opens the agent),
     "Bloqueos" (blocked tasks, a tap opens the agent), "Agentes" (the rest: host, status, progress,

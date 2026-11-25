@@ -93,7 +93,7 @@ object CarNotifications {
         val tag = m["tag"] as? String ?: return
         val key = m["sessionKey"] as? String ?: return
         // The car engine's notice replaces what a data push drew for this session.
-        cancelPush(ctx, key, null)
+        if (!tag.startsWith("talk/")) cancelPush(ctx, key, null)
         val session = m["session"] as? String ?: key
         val host = m["host"] as? String ?: ""
         val text = m["text"] as? String ?: ""

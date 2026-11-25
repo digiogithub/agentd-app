@@ -70,14 +70,15 @@
                 android:value="Keeps the user's SSH connections to their own hosts open in the background to receive notifications from the coding agents running there." />
         </service>
         <!-- Android Auto (docs/android-auto.md): the Panel on the car screen
-             (Car App Library, messaging category), messaging notifications
+             (Car App Library, IoT category: Android Auto does not list a sideloaded
+             templated messaging app), messaging notifications
              with a dictated reply, and FCM pushes waking the car engine. -->
         <service
             android:name=".car.AgentdCarAppService"
             android:exported="true">
             <intent-filter>
                 <action android:name="androidx.car.app.CarAppService" />
-                <category android:name="androidx.car.app.category.MESSAGING" />
+                <category android:name="androidx.car.app.category.IOT" />
             </intent-filter>
         </service>
         <meta-data

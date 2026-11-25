@@ -22,6 +22,9 @@ import androidx.core.app.Person
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 
+/** Conversations (dictated replies on the car screen) need the messaging category. */
+private const val CONVERSATIONS = false
+
 /** A screen redrawn on every snapshot of the car engine while it is shown. */
 abstract class LiveCarScreen(ctx: CarContext, protected val speaker: CarSpeaker) : Screen(ctx) {
     private val listener: () -> Unit = { invalidate() }
@@ -89,7 +92,9 @@ abstract class LiveCarScreen(ctx: CarContext, protected val speaker: CarSpeaker)
      * offers a dictated reply, sent as the car engine's `reply`.
      */
     protected fun conversation(agent: CarAgent, messages: List<String>, open: (() -> Unit)? = null): Item {
-        if (!modern) {
+        // ConversationItem is for messaging-category apps only; this app is
+        // IoT (see the manifest), so a row: tap = open the agent or hear it.
+        if (!CONVERSATIONS || !modern) {
             val last = messages.lastOrNull() ?: agent.preview ?: "Sin mensajes"
             return Row.Builder()
                 .setTitle(if (agent.host.isEmpty()) agent.name else "${agent.name} · ${agent.host}")
@@ -243,6 +248,17 @@ class AgentCarScreen(ctx: CarContext, speaker: CarSpeaker, private val key: Stri
                         onResult = { tell("Elegido en ${a.name}: ${o.label}") }, onError = ::tell)
                 }.build())
             }
+        }
+        if (a.canOperate) {
+            items.add(Row.Builder().setTitle("Dictar instrucción").addText("Pulsa Responder en el aviso y habla").setOnClickListener {
+                // Templated IoT apps get no dictation: a messaging notification
+                // does (Reply = Google Assistant dictation, sent as `reply`).
+                CarNotifications.post(carContext, mapOf(
+                    "tag" to "talk/${a.key}", "sessionKey" to a.key, "session" to a.name, "host" to a.host,
+                    "text" to if (a.waiting) "Contesta a ${a.name}: ${waitingMessages(a).joinToString(" ").take(300)}" else "¿Qué le digo a ${a.name}?",
+                ))
+                tell("Responde al aviso de ${a.name}")
+            }.build())
         }
         items.add(Row.Builder().setTitle("Escuchar conclusión").addText(subtitle(a)).setOnClickListener {
             toast("Leyendo la conclusión")

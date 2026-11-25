@@ -41,7 +41,9 @@ class CarReplyReceiver : BroadcastReceiver() {
                     CarEngine.call(
                         "reply", mapOf("key" to key, "text" to text),
                         onResult = { r ->
-                            CarNotifications.update(app, tag, key, session, text, r as? String ?: "Enviado")
+                            // A dictation notice is done once sent.
+                            if (tag.startsWith("talk/")) CarNotifications.cancel(app, tag)
+                            else CarNotifications.update(app, tag, key, session, text, r as? String ?: "Enviado")
                             finish()
                         },
                         onError = { e ->
