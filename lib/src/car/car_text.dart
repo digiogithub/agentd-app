@@ -134,13 +134,16 @@ int? matchSpokenOption(String spoken, List<String> options) {
   final exact = [for (final (i, l) in labels.indexed) if (l == s) i];
   if (exact.length == 1) return exact.first;
 
-  // The number of the option.
+  // The number of the option, alone or leading ("uno", "dos, la de
+  // mantenimiento"): dictation often adds the label after the number.
   final words = s.split(' ');
   final filler = {'la', 'el', 'opcion', 'numero', 'option', 'number', 'the', 'elijo', 'escoge', 'elige', 'quiero'};
   final rest = words.where((w) => !filler.contains(w)).toList();
-  if (rest.length == 1) {
+  if (rest.isNotEmpty) {
     final n = int.tryParse(rest.first) ?? _ordinals[rest.first];
-    if (n != null) return n >= 1 && n <= options.length ? n - 1 : null;
+    if (n != null && rest.length == 1) return n >= 1 && n <= options.length ? n - 1 : null;
+    // A number followed by words of that same option ("uno, sí la veo").
+    if (n != null && n >= 1 && n <= options.length && _hasWords(labels[n - 1], rest.skip(1).join(' '))) return n - 1;
   }
 
   // Yes / no.
@@ -163,16 +166,23 @@ int? matchSpokenOption(String spoken, List<String> options) {
     if (i != null) return i;
   }
 
-  // The label contains what was said, or the other way round.
+  // The label contains what was said, or the other way round, word for
+  // word ("no" is not inside "uno").
   if (s.length >= 3) {
     final hits = <int>{
       for (final (i, l) in labels.indexed)
-        if (l.isNotEmpty && (l.contains(s) || s.contains(l))) i,
+        if (l.isNotEmpty && (_hasWords(l, s) || _hasWords(s, l))) i,
     };
     if (hits.length == 1) return hits.first;
+    // Both: the longest label said wins ("si la veo" over "si").
+    final full = [for (final i in hits) if (_hasWords(s, labels[i])) i]..sort((a, b) => labels[b].length - labels[a].length);
+    if (full.length > 1 && labels[full[0]].length > labels[full[1]].length) return full[0];
   }
   return null;
 }
+
+/// Whether [text] holds [part] as whole words.
+bool _hasWords(String text, String part) => ' $text '.contains(' $part ');
 
 /// Options as they are read aloud: "1, Sí. 2, No."
 String spokenOptions(List<String> options) => [for (final (i, o) in options.indexed) '${i + 1}, ${o.trim()}.'].join(' ');

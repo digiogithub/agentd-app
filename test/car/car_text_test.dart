@@ -29,6 +29,17 @@ void main() {
       expect(matchSpokenOption('mañana', opts), isNull);
     });
 
+    test('a leading number wins over the words after it', () {
+      expect(matchSpokenOption('uno sí la veo', const ['Sí, la veo', 'No']), 0);
+      expect(matchSpokenOption('dos, la de mantenimiento', const ['Migración en caliente', 'Ventana de mantenimiento']), 1);
+    });
+
+    test('labels match word for word', () {
+      expect(matchSpokenOption('sí la veo', const ['Sí, la veo', 'No']), 0);
+      expect(matchSpokenOption('una cosa', const ['Sí', 'No']), isNull);
+      expect(matchSpokenOption('sí la veo', const ['Sí', 'Sí, la veo']), 1);
+    });
+
     test('ambiguous or empty answers name nothing', () {
       expect(matchSpokenOption('', yesNo), isNull);
       expect(matchSpokenOption('and', yesNo), isNull);
