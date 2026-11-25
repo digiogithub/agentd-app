@@ -11,6 +11,7 @@ import android.os.Build
 import androidx.car.app.connection.CarConnection
 import androidx.lifecycle.Observer
 import dev.digio.agentd_app.car.CarEngine
+import dev.digio.agentd_app.car.CarNotifications
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -37,11 +38,14 @@ class MainActivity : FlutterActivity() {
     }
 
     companion object {
-        const val EVENTS = "agentd_events"
+        /** Event notifications (sound + vibration); replaces `agentd_events`, created without vibration. */
+        const val EVENTS = "agentd_events_alert"
+        private const val LEGACY_EVENTS = "agentd_events"
         const val EXTRA_SESSION = "agentd_session"
 
-        /** Push notifications of the hosts' daemons (FCM, agentd [push]). */
-        const val ATTENTION = "agentd_attention"
+        /** True while the app is on screen: FCM does not show pushes then. */
+        @Volatile
+        var visible = false
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -85,6 +89,16 @@ class MainActivity : FlutterActivity() {
         intent?.getStringExtra(EXTRA_SESSION)?.let { s -> ch.invokeMethod("open", s) }
     }
 
+    override fun onResume() {
+        super.onResume()
+        visible = true
+    }
+
+    override fun onPause() {
+        visible = false
+        super.onPause()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         intent.getStringExtra(EXTRA_SESSION)?.let { s -> channel?.invokeMethod("open", s) }
@@ -100,15 +114,8 @@ class MainActivity : FlutterActivity() {
         super.onDestroy()
     }
 
-    /** The channel the daemons' pushes name; it must exist before one arrives. */
-    private fun createAttentionChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val nm = getSystemService(NotificationManager::class.java)
-        if (nm.getNotificationChannel(ATTENTION) != null) return
-        val ch = NotificationChannel(ATTENTION, "Decisiones pendientes", NotificationManager.IMPORTANCE_HIGH)
-        ch.description = "Un agente te pregunta o pide permiso (notificaciones push de los hosts)"
-        nm.createNotificationChannel(ch)
-    }
+    /** The channel of the daemons' pushes; it must exist before one arrives. */
+    private fun createAttentionChannel() = CarNotifications.ensureChannel(this)
 
     private fun requestNotifications(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
@@ -120,8 +127,11 @@ class MainActivity : FlutterActivity() {
     private fun notifyEvent(id: Int, title: String, text: String, session: String?) {
         val nm = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm.getNotificationChannel(EVENTS) == null) {
+            if (nm.getNotificationChannel(LEGACY_EVENTS) != null) nm.deleteNotificationChannel(LEGACY_EVENTS)
             val ch = NotificationChannel(EVENTS, "Avisos de los agentes", NotificationManager.IMPORTANCE_HIGH)
-            ch.description = "Un agente espera respuesta, termina un turno o se cierra"
+            ch.description = "Un agente espera respuesta, termina un turno o se cierra: suena y vibra"
+            ch.enableVibration(true)
+            ch.vibrationPattern = longArrayOf(0, 180, 120, 180)
             nm.createNotificationChannel(ch)
         }
         val open = PendingIntent.getActivity(
@@ -140,6 +150,10 @@ class MainActivity : FlutterActivity() {
             .setContentIntent(open)
             .setAutoCancel(true)
             .setCategory(Notification.CATEGORY_MESSAGE)
+            .apply {
+                @Suppress("DEPRECATION")
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) setDefaults(Notification.DEFAULT_SOUND or Notification.DEFAULT_VIBRATE)
+            }
             .build()
         nm.notify(id, n)
     }

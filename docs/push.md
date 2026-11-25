@@ -54,9 +54,14 @@ app id), not a server credential; it stays out of git anyway so that forks use t
   token refresh), unregisters when Ajustes > **Notificaciones push** is turned off or a host is
   removed. A push received in the foreground shows nothing (the Panel is live) and reconnects the
   hosts. A tap on `question` opens the Panel; any other reason opens that session's chat.
-- Android: channel `agentd_attention` ("Decisiones pendientes", high importance) created in
-  `MainActivity`, set as the FCM default channel in the manifest; Android 13+ asks for the
-  notification permission the first time push is on.
+- Android: channel `agentd_alerts` ("Decisiones pendientes", high importance, notification sound
+  and a short vibration) created by `CarNotifications.ensureChannel` (at start and on every push) and
+  set as the FCM default channel in the manifest. It replaces `agentd_attention` (created without
+  vibration; Android never changes a created channel), which is deleted: the daemons still name
+  `agentd_attention`, so FCM falls back to the default. The app's event notifications moved to
+  `agentd_events_alert` for the same reason. With the app on screen FCM shows nothing, so the push
+  receiver draws the push itself (sound, vibration, reply). Android 13+ asks for the notification
+  permission the first time push is on.
 - Android data mode (agentd `[push] android_mode`, or `push_register {mode: "data"}` which the app
   sends when the daemon lists `data` in `modes`): the app draws the notification itself (reply by voice,
   Android Auto) and removes it on a `resolved` push. See `docs/android-auto.md`.

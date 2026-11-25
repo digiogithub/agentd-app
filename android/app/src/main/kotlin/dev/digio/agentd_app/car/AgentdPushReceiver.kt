@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import androidx.car.app.connection.CarConnection
 import androidx.lifecycle.Observer
+import dev.digio.agentd_app.MainActivity
 
 /**
  * Sees every FCM message next to firebase_messaging's own receiver (same
@@ -18,8 +19,9 @@ import androidx.lifecycle.Observer
  *   drawn here as a messaging notification with Reply / Mark as read
  *   (Android Auto shows it, Assistant reads and answers it); a `resolved`
  *   push cancels it. With the car engine running, the engine draws instead.
- * - Notification pushes (older daemons): Android draws them, Android Auto
- *   ignores them.
+ * - Notification pushes (older daemons): Android draws them in the
+ *   background (Android Auto ignores them); with the app on screen FCM shows
+ *   nothing, so they are drawn here too (sound and vibration).
  * In both cases, while the phone is in the car, the push wakes the car
  * engine, which reconnects and posts its own notification for the item.
  */
@@ -28,6 +30,9 @@ class AgentdPushReceiver : BroadcastReceiver() {
         val extras = intent.extras ?: return
         if (extras.getString("v") != "1" || extras.getString("host_ref").isNullOrEmpty()) return
         val app = context.applicationContext
+        // The channel FCM falls back to must exist even if the app was not
+        // opened since the update (closed app: FCM draws the push).
+        CarNotifications.ensureChannel(app)
         val main = Handler(Looper.getMainLooper())
         val hostRef = extras.getString("host_ref")!!
         val session = extras.getString("session") ?: return
@@ -41,9 +46,12 @@ class AgentdPushReceiver : BroadcastReceiver() {
             }
             return
         }
-        if (!system && !CarEngine.running) {
-            val title = extras.getString("title") ?: ""
-            val body = extras.getString("body") ?: ""
+        // Data pushes are drawn here; notification pushes too while the app is
+        // on screen (FCM shows nothing then, and the user wants the alert).
+        if ((!system || MainActivity.visible) && !CarEngine.running) {
+            fun field(k: String) = extras.getString(k) ?: extras.getString("gcm.notification.$k") ?: extras.getString("gcm.n.$k") ?: ""
+            val title = field("title")
+            val body = field("body")
             main.post { CarNotifications.postPush(app, key, session, reason, title, body) }
         }
         if (CarEngine.running) {

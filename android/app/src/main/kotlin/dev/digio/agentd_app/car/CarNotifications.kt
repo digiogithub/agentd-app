@@ -5,6 +5,8 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -20,7 +22,16 @@ import dev.digio.agentd_app.R
  * neither opening a UI). A dictated reply goes to CarReplyReceiver.
  */
 object CarNotifications {
-    const val CHANNEL = "agentd_attention"
+    /**
+     * Questions and permission dialogs: sound + a short vibration. The first
+     * channel (`agentd_attention`) had no vibration and Android never changes
+     * a created channel, so it is replaced: the daemons still name
+     * `agentd_attention` in their pushes and FCM then falls back to the
+     * manifest default, this one.
+     */
+    const val CHANNEL = "agentd_alerts"
+    private const val LEGACY_CHANNEL = "agentd_attention"
+    private val VIBRATION = longArrayOf(0, 180, 120, 180)
     const val ID = 7502
     const val KEY_REPLY = "agentd_reply"
     const val EXTRA_TAG = "agentd_tag"
@@ -38,9 +49,19 @@ object CarNotifications {
     fun ensureChannel(ctx: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = ctx.getSystemService(NotificationManager::class.java)
+        if (nm.getNotificationChannel(LEGACY_CHANNEL) != null) nm.deleteNotificationChannel(LEGACY_CHANNEL)
         if (nm.getNotificationChannel(CHANNEL) != null) return
         val ch = NotificationChannel(CHANNEL, "Decisiones pendientes", NotificationManager.IMPORTANCE_HIGH)
-        ch.description = "Un agente te pregunta o pide permiso (notificaciones push de los hosts)"
+        ch.description = "Un agente te pregunta o pide permiso: suena y vibra"
+        ch.enableVibration(true)
+        ch.vibrationPattern = VIBRATION
+        ch.setSound(
+            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
+            AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build(),
+        )
         nm.createNotificationChannel(ch)
     }
 
@@ -135,6 +156,8 @@ object CarNotifications {
             .setStyle(style)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_SOUND)
+            .setVibrate(VIBRATION)
             .setContentIntent(open)
             .setAutoCancel(true)
             .setOnlyAlertOnce(!alert)

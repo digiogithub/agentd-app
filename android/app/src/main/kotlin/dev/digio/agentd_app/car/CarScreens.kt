@@ -8,6 +8,7 @@ import androidx.car.app.messaging.model.CarMessage
 import androidx.car.app.messaging.model.ConversationCallback
 import androidx.car.app.messaging.model.ConversationItem
 import androidx.car.app.model.Action
+import androidx.car.app.model.ActionStrip
 import androidx.car.app.model.CarText
 import androidx.car.app.model.Header
 import androidx.car.app.model.Item
@@ -47,11 +48,35 @@ abstract class LiveCarScreen(ctx: CarContext, protected val speaker: CarSpeaker)
         speaker.say(text)
     }
 
-    protected fun header(title: String, back: Boolean, vararg end: Action): Header {
+    /**
+     * Car API level 7 (Android Auto 2024+) brings headers and conversations
+     * (dictated replies on the car screen). Older hosts get a title, an
+     * action strip and plain rows; replies then go through the notifications.
+     */
+    protected val modern get() = carContext.carAppApiLevel >= 7
+
+    private fun header(title: String, back: Boolean, end: Action?): Header {
         val h = Header.Builder().setTitle(title)
         if (back) h.setStartHeaderAction(Action.BACK)
-        end.forEach { h.addEndHeaderAction(it) }
+        end?.let { h.addEndHeaderAction(it) }
         return h.build()
+    }
+
+    protected fun listTemplate(title: String, back: Boolean, end: Action? = null): ListTemplate.Builder {
+        val t = ListTemplate.Builder()
+        if (modern) return t.setHeader(header(title, back, end))
+        t.setTitle(title)
+        if (back) t.setHeaderAction(Action.BACK)
+        end?.let { t.setActionStrip(ActionStrip.Builder().addAction(it).build()) }
+        return t
+    }
+
+    protected fun messageTemplate(text: String, title: String, back: Boolean): MessageTemplate.Builder {
+        val t = MessageTemplate.Builder(text)
+        if (modern) return t.setHeader(header(title, back, null))
+        t.setTitle(title)
+        if (back) t.setHeaderAction(Action.BACK)
+        return t
     }
 
     protected fun action(title: String, onClick: () -> Unit): Action =
@@ -63,7 +88,15 @@ abstract class LiveCarScreen(ctx: CarContext, protected val speaker: CarSpeaker)
      * The conversation with [agent]: the host reads [messages] aloud and
      * offers a dictated reply, sent as the car engine's `reply`.
      */
-    protected fun conversation(agent: CarAgent, messages: List<String>, open: (() -> Unit)? = null): ConversationItem {
+    protected fun conversation(agent: CarAgent, messages: List<String>, open: (() -> Unit)? = null): Item {
+        if (!modern) {
+            val last = messages.lastOrNull() ?: agent.preview ?: "Sin mensajes"
+            return Row.Builder()
+                .setTitle(if (agent.host.isEmpty()) agent.name else "${agent.name} · ${agent.host}")
+                .addText(last.take(200))
+                .setOnClickListener { if (open != null) open() else speaker.say(messages.joinToString(". ").ifBlank { last }) }
+                .build()
+        }
         val who = Person.Builder().setKey(agent.key).setName(agent.name).setBot(true).build()
         val now = System.currentTimeMillis()
         val msgs = messages.ifEmpty { listOf(agent.preview ?: "Sin mensajes") }.mapIndexed { i, t ->
@@ -129,7 +162,7 @@ class PanelCarScreen(ctx: CarContext, speaker: CarSpeaker) : LiveCarScreen(ctx, 
             CarEngine.call("refresh", null)
             toast("Reconectando")
         }
-        val t = ListTemplate.Builder().setHeader(header("agentd", false, refresh))
+        val t = listTemplate("agentd", false, refresh)
         if (snap == null) return t.setLoading(true).build()
         val agents = CarModel.agents(snap)
         var budget = listLimit
@@ -188,7 +221,7 @@ class AgentCarScreen(ctx: CarContext, speaker: CarSpeaker, private val key: Stri
 
     override fun onGetTemplate(): Template {
         val a = CarModel.agent(CarEngine.snapshot, key)
-            ?: return MessageTemplate.Builder("Este agente ya no está en el panel").setHeader(header("agentd", true)).build()
+            ?: return messageTemplate("Este agente ya no está en el panel", "agentd", true).build()
         val items = mutableListOf<Item>()
         val msgs = buildList {
             conclusion?.let { add(it) }
@@ -223,7 +256,7 @@ class AgentCarScreen(ctx: CarContext, speaker: CarSpeaker, private val key: Stri
         }
         val l = ItemList.Builder()
         items.take(listLimit).forEach { l.addItem(it) }
-        return ListTemplate.Builder().setHeader(header(a.name, true)).setSingleList(l.build()).build()
+        return listTemplate(a.name, true).setSingleList(l.build()).build()
     }
 }
 
@@ -252,12 +285,11 @@ class LinesCarScreen(ctx: CarContext, speaker: CarSpeaker, private val key: Stri
     private fun spoken() = lines.orEmpty().joinToString(". ") { it.removePrefix("> ") }.ifBlank { "Sin líneas todavía" }
 
     override fun onGetTemplate(): Template {
-        val h = header("Últimas líneas · $name", true)
+        val title = "Últimas líneas · $name"
         val ls = lines
-        if (ls == null && error == null) return MessageTemplate.Builder("Cargando…").setHeader(h).setLoading(true).build()
+        if (ls == null && error == null) return messageTemplate("Cargando…", title, true).setLoading(true).build()
         val text = error ?: ls.orEmpty().joinToString("\n").ifBlank { "Sin líneas todavía" }.takeLast(1000)
-        return MessageTemplate.Builder(text)
-            .setHeader(h)
+        return messageTemplate(text, title, true)
             .addAction(action("Escuchar") { speaker.say(spoken()) })
             .addAction(action("Actualizar") { load(speak = false) })
             .build()

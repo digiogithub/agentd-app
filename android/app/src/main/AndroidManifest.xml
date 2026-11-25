@@ -12,6 +12,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Short vibration of the agents' notifications (Android 7 builders). -->
+    <uses-permission android:name="android.permission.VIBRATE"/>
     <application
         android:label="agentd"
         android:name="${applicationName}"
@@ -48,10 +50,11 @@
             </intent-filter>
         </activity>
         <!-- Push notifications from the hosts' daemons (FCM, agentd [push]):
-             they name channel agentd_attention, created in MainActivity. -->
+             they name channel agentd_attention, which no longer exists, so FCM
+             uses this default (sound + vibration; CarNotifications). -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="agentd_attention" />
+            android:value="agentd_alerts" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_stat_agentd" />
@@ -79,7 +82,7 @@
         </service>
         <meta-data
             android:name="androidx.car.app.minCarApiLevel"
-            android:value="7" />
+            android:value="1" />
         <meta-data
             android:name="com.google.android.gms.car.application"
             android:resource="@xml/automotive_app_desc" />

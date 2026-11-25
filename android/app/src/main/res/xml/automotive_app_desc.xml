@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Android Auto: a templated app (Car App Library, messaging category) whose
-     messaging notifications the car shows and Google Assistant reads. -->
+<!-- Android Auto: a templated app (Car App Library, messaging category). Its
+     MessagingStyle notifications are shown and read by the car as well.
+     `notification` is not declared: with it Android Auto may open the app as
+     a notification-only messaging app (a list of received messages) instead
+     of its own screens. -->
 <automotiveApp>
     <uses name="template" />
-    <uses name="notification" />
 </automotiveApp>

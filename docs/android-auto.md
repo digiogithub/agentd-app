@@ -20,7 +20,7 @@ Added on 2026-11-25, version 1.10.0; data-only pushes 1.11.0 (needs the agentd A
   the terminal menu option it names (no match = refused, the options are read back), else sends the
   words to the agent's prompt as an instruction. The outcome is shown and spoken.
 - **Notifications**: the car engine posts one MessagingStyle notification per open question / menu
-  (channel `agentd_attention`, tag `q/<host>/<id>` or `m/<session key>/<revision>`) with Reply
+  (channel `agentd_alerts`, tag `q/<host>/<id>` or `m/<session key>/<revision>`) with Reply
   (RemoteInput, `SEMANTIC_ACTION_REPLY`, no UI) and Mark as read: the form Android Auto shows and
   Assistant reads. A reply updates the notification with what was said and the outcome; a closed item
   cancels it.
