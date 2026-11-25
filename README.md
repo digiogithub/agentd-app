@@ -57,6 +57,8 @@ bottom sends the text as a prompt to each picked agent at once.
 - Code in the agent's answer is a block in a monospace font, as written (no markup), that scrolls
   sideways and has a copy button. This needs agentd 0.8.2 or later on the host; older daemons
   show code as plain text.
+  When prose was taken for code, the button next to copy shows the block as normal wrapped text
+  (and back); copy still copies the original.
 
 ## Panel (work dashboard)
 

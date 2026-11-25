@@ -117,6 +117,14 @@ No daemon contract change: the app reads one more optional field.
   dismisses it. A table cell keeps its own long-press (copy the cell). Entries scrolled far out of
   the list are not part of a selection (the list builds lazily). The composer is a plain `TextField`:
   paste always worked.
+- **Code block as text** (2026-11-25, version 1.8.0, same behaviour as agentd-desktop): the detection
+  sometimes takes prose for code (no wrap, unreadable), so `ChatCodeBlock` has a second button,
+  "Mostrar como texto" / "Mostrar como código". Text mode (`chat/code_text.dart` `codeAsProse`):
+  indentation trimmed, consecutive lines joined with a space, a list item (`- `, `* `, `• `, `1. `)
+  on its own line, a blank line = paragraph break; rendered in the chat font with links, no markup
+  (backticks stay). Copy always copies the original block. The choice lives in memory in
+  `_ChatTabState` (`CodeBlockModes`), keyed by the block's first two lines (`codeBlockKey`) so it
+  survives view refreshes and streaming; it is not persisted. Client only, no wire change.
 - **Wire**: `AgentdViewLine.code` (JSON `code: true`, view `markup: true`, agentd 0.8.2 or later;
   absent = false, so older daemons give no code blocks). A code line has no `md`.
 - **Parser** (`agentd/mapping.dart` `chatItemsFromLines`):

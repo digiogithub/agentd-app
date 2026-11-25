@@ -2,9 +2,11 @@
 // the composer takes a paste.
 
 import 'package:agentd_app/src/core/contracts.dart';
+import 'package:agentd_app/src/ui/chat/code_text.dart';
 import 'package:agentd_app/src/ui/chat/table_parser.dart';
 import 'package:agentd_app/src/ui/fakes/sample_data.dart';
 import 'package:agentd_app/src/ui/screens/chat_tab.dart';
+import 'package:agentd_app/src/ui/widgets/common.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -113,6 +115,45 @@ void main() {
     await tester.pump();
     expect(copied(), 'sudo dpkg -i **a**.deb\n  second_line');
     expect(find.text('Código copiado'), findsOneWidget);
+  });
+
+  test('a code block as prose: joined lines, list items, paragraphs', () {
+    expect(codeAsProse('  Esto es prosa que la terminal\n  cortó en dos líneas.\n\n  Otro párrafo:\n  - uno\n    sigue\n  * dos\n  1. tres\n\n\n  fin'),
+        'Esto es prosa que la terminal cortó en dos líneas.\n\nOtro párrafo:\n- uno sigue\n* dos\n1. tres\n\nfin');
+    expect(codeAsProse('\n  solo\n'), 'solo');
+    expect(codeBlockKey('a\nb\nc'), 'a\nb');
+    expect(codeBlockKey('a'), 'a');
+  });
+
+  testWidgets('a code block toggles to wrapped text and back; copy keeps the original', (tester) async {
+    final copied = _mockClipboard(tester);
+    const code = '  Esto es prosa con `comillas` que la terminal\n  cortó. Ver https://example.com/x';
+    const item = ChatItem(role: ChatRole.agent, text: 'Mira:\n\n````\n$code\n````\n\nFin.');
+    await _pumpChat(tester, const [item]);
+    expect(find.text(code), findsOneWidget);
+    expect(find.byKey(const ValueKey('code-as-text')), findsNothing);
+    expect(tester.widget<RoundIconButton>(find.byKey(const ValueKey('toggle-code'))).label, 'Mostrar como texto');
+
+    await tester.tap(find.byKey(const ValueKey('toggle-code')));
+    await tester.pump();
+    expect(find.text(code), findsNothing);
+    expect(find.byKey(const ValueKey('code-as-text')), findsOneWidget);
+    // One paragraph, backticks kept, the link apart.
+    expect(find.textContaining('Esto es prosa con `comillas` que la terminal cortó. Ver ', findRichText: true), findsOneWidget);
+    expect(tester.widget<RoundIconButton>(find.byKey(const ValueKey('toggle-code'))).label, 'Mostrar como código');
+    await tester.tap(find.byKey(const ValueKey('copy-code')));
+    await tester.pump();
+    expect(copied(), code);
+
+    // The choice survives a refresh of the view in which the block grew.
+    await _pumpChat(tester, const [ChatItem(role: ChatRole.agent, text: 'Mira:\n\n````\n$code\n  y sigue.\n````')]);
+    expect(find.byKey(const ValueKey('code-as-text')), findsOneWidget);
+    expect(find.textContaining('y sigue.', findRichText: true), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('toggle-code')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('code-as-text')), findsNothing);
+    expect(find.text('$code\n  y sigue.'), findsOneWidget);
   });
 
   testWidgets('the composer takes a paste', (tester) async {

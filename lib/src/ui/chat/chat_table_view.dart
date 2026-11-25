@@ -8,6 +8,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'code_text.dart';
 import 'linkified_text.dart';
 import 'table_parser.dart';
 
@@ -130,50 +131,99 @@ class ChatTableView extends StatelessWidget {
 }
 
 /// A code block of the agent: monospace, scrolls sideways, with a button
-/// that copies the whole block.
-class ChatCodeBlock extends StatelessWidget {
-  const ChatCodeBlock({super.key, required this.code, this.fontSize = 12.5});
+/// that copies the whole block and one that shows it as normal, wrapped text
+/// (for prose the daemon took for code) and back.
+class ChatCodeBlock extends StatefulWidget {
+  const ChatCodeBlock({super.key, required this.code, this.fontSize = 12.5, this.textStyle});
   final String code;
   final double fontSize;
 
+  /// Style of the text mode (the chat font).
+  final TextStyle? textStyle;
+
   @override
-  Widget build(BuildContext context) => Semantics(
-    container: true,
-    label: 'Bloque de código',
-    child: Container(
-      key: const ValueKey('code-block'),
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
-              child: Text(code, softWrap: false, style: AppFonts.mono(size: fontSize, color: AppColors.text, height: 1.45)),
+  State<ChatCodeBlock> createState() => _ChatCodeBlockState();
+}
+
+class _ChatCodeBlockState extends State<ChatCodeBlock> {
+  // Used when no [CodeBlockModes] is above (the block alone).
+  bool _local = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final code = widget.code;
+    final modes = CodeBlockModes.maybeOf(context);
+    final id = codeBlockKey(code);
+    final asText = modes?.contains(id) ?? _local;
+    void toggle() => setState(() {
+      if (modes == null) {
+        _local = !_local;
+      } else if (!modes.remove(id)) {
+        modes.add(id);
+      }
+    });
+    return Semantics(
+      container: true,
+      label: asText ? 'Bloque de código como texto' : 'Bloque de código',
+      child: Container(
+        key: const ValueKey('code-block'),
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: asText
+                  ? Padding(
+                      key: const ValueKey('code-as-text'),
+                      padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
+                      child: LinkifiedText(
+                        codeAsProse(code),
+                        style: widget.textStyle ?? AppFonts.inter(size: widget.fontSize + 2, color: AppColors.text, height: 1.5),
+                        inlineCode: false,
+                      ),
+                    )
+                  : SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
+                      child: Text(code, softWrap: false, style: AppFonts.mono(size: widget.fontSize, color: AppColors.text, height: 1.45)),
+                    ),
             ),
-          ),
-          // The button is not part of a text selection.
-          SelectionContainer.disabled(
-            child: RoundIconButton(
-              key: const ValueKey('copy-code'),
-              icon: Icons.copy,
-              label: 'Copiar código',
-              fg: AppColors.muted,
-              iconSize: 16,
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: code));
-                showToast(context, 'Código copiado');
-              },
+            // The buttons are not part of a text selection.
+            SelectionContainer.disabled(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  RoundIconButton(
+                    key: const ValueKey('toggle-code'),
+                    icon: asText ? Icons.code : Icons.wrap_text,
+                    label: asText ? 'Mostrar como código' : 'Mostrar como texto',
+                    fg: AppColors.muted,
+                    iconSize: 16,
+                    onPressed: toggle,
+                  ),
+                  RoundIconButton(
+                    key: const ValueKey('copy-code'),
+                    icon: Icons.copy,
+                    label: 'Copiar código',
+                    fg: AppColors.muted,
+                    iconSize: 16,
+                    onPressed: () {
+                      // Always the block as the agent wrote it.
+                      Clipboard.setData(ClipboardData(text: code));
+                      showToast(context, 'Código copiado');
+                    },
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }

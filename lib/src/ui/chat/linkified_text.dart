@@ -15,11 +15,15 @@ class LinkifiedText extends ConsumerStatefulWidget {
     required this.style,
     this.codeColor,
     this.codeSize,
+    this.inlineCode = true,
   });
   final String text;
   final TextStyle style;
   final Color? codeColor;
   final double? codeSize;
+
+  /// False shows backticks as they are (text that is not markup).
+  final bool inlineCode;
 
   @override
   ConsumerState<LinkifiedText> createState() => _LinkifiedTextState();
@@ -79,7 +83,7 @@ class _LinkifiedTextState extends ConsumerState<LinkifiedText> {
     }
     _recognizers.clear();
     final style = widget.style;
-    final parts = widget.text.split('`');
+    final parts = widget.inlineCode ? widget.text.split('`') : [widget.text];
     final spans = <InlineSpan>[];
     for (var i = 0; i < parts.length; i++) {
       if (parts[i].isEmpty) continue;

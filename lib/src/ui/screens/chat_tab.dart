@@ -9,6 +9,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/contracts.dart';
 import '../../agentd/errors.dart';
 import '../chat/chat_table_view.dart';
+import '../chat/code_text.dart';
 import '../chat/linkified_text.dart';
 import '../chat/markup_text.dart';
 import '../chat/table_parser.dart';
@@ -45,6 +46,8 @@ class _ChatTabState extends ConsumerState<ChatTab> {
   // True while the list is pinned to its newest line; scrolling up releases
   // it and coming back to the bottom (or the button) pins it again.
   bool _follow = true;
+  // Code blocks of this view shown as text (in memory only).
+  final _codeAsText = <String>{};
 
   @override
   void initState() {
@@ -256,7 +259,10 @@ class _ChatTabState extends ConsumerState<ChatTab> {
                     // Long-press selects chat text; the handles extend the
                     // selection across paragraphs and entries, Copy copies it.
                     SelectionArea(
-                      child: ListView(controller: _scroll, padding: const EdgeInsets.fromLTRB(16, 16, 16, 8), children: children),
+                      child: CodeBlockModes(
+                        asText: _codeAsText,
+                        child: ListView(controller: _scroll, padding: const EdgeInsets.fromLTRB(16, 16, 16, 8), children: children),
+                      ),
                     ),
                     if (!_follow)
                       Positioned(
@@ -715,7 +721,7 @@ class _AgentText extends ConsumerWidget {
           if (i > 0) const SizedBox(height: 8),
           switch (s) {
             TextSegment() => prose(s.text),
-            CodeSegment() => ChatCodeBlock(code: s.code, fontSize: font.$2 - 2),
+            CodeSegment() => ChatCodeBlock(code: s.code, fontSize: font.$2 - 2, textStyle: AppFonts.chat(font.$1, size: font.$2, height: 1.5 * font.$3.factor)),
             TableSegment() => ChatTableView(
               table: ChatTable(
                 header: s.table.header?.map(unmarkup).toList(),
