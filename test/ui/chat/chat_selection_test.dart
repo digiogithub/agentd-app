@@ -138,6 +138,11 @@ void main() {
     await tester.pump();
     expect(find.text(code), findsNothing);
     expect(find.byKey(const ValueKey('code-as-text')), findsOneWidget);
+    // The buttons sit on a bar above: the text takes the block's full width.
+    final block = tester.getRect(find.byKey(const ValueKey('code-block')));
+    final text = tester.getRect(find.byKey(const ValueKey('code-as-text')));
+    expect(block.width - text.width, lessThanOrEqualTo(4));
+    expect(tester.getRect(find.byKey(const ValueKey('toggle-code'))).bottom, lessThanOrEqualTo(text.top + 1));
     // One paragraph, backticks kept, the link apart.
     expect(find.textContaining('Esto es prosa con `comillas` que la terminal cortó. Ver ', findRichText: true), findsOneWidget);
     expect(tester.widget<RoundIconButton>(find.byKey(const ValueKey('toggle-code'))).label, 'Mostrar como código');

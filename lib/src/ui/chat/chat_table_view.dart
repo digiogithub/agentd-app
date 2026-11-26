@@ -173,30 +173,15 @@ class _ChatCodeBlockState extends State<ChatCodeBlock> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.border),
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        // Buttons on a bar above the block, so the text gets the full width
+        // (side buttons left a narrow column for wrapped text).
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: asText
-                  ? Padding(
-                      key: const ValueKey('code-as-text'),
-                      padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
-                      child: LinkifiedText(
-                        codeAsProse(code),
-                        style: widget.textStyle ?? AppFonts.inter(size: widget.fontSize + 2, color: AppColors.text, height: 1.5),
-                        inlineCode: false,
-                      ),
-                    )
-                  : SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
-                      child: Text(code, softWrap: false, style: AppFonts.mono(size: widget.fontSize, color: AppColors.text, height: 1.45)),
-                    ),
-            ),
             // The buttons are not part of a text selection.
             SelectionContainer.disabled(
               child: Row(
-                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   RoundIconButton(
                     key: const ValueKey('toggle-code'),
@@ -221,6 +206,21 @@ class _ChatCodeBlockState extends State<ChatCodeBlock> {
                 ],
               ),
             ),
+            asText
+                ? Padding(
+                    key: const ValueKey('code-as-text'),
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    child: LinkifiedText(
+                      codeAsProse(code),
+                      style: widget.textStyle ?? AppFonts.inter(size: widget.fontSize + 2, color: AppColors.text, height: 1.5),
+                      inlineCode: false,
+                    ),
+                  )
+                : SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    child: Text(code, softWrap: false, style: AppFonts.mono(size: widget.fontSize, color: AppColors.text, height: 1.45)),
+                  ),
           ],
         ),
       ),

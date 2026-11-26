@@ -118,7 +118,8 @@ No daemon contract change: the app reads one more optional field.
   the list are not part of a selection (the list builds lazily). The composer is a plain `TextField`:
   paste always worked.
 - **Code block as text** (2026-11-25, version 1.8.0, same behaviour as agentd-desktop): the detection
-  sometimes takes prose for code (no wrap, unreadable), so `ChatCodeBlock` has a second button,
+  sometimes takes prose for code (no wrap, unreadable), so `ChatCodeBlock` has a second button
+  (both buttons on a bar above the block since 2026-11-26, version 1.11.6, so the text uses the full width),
   "Mostrar como texto" / "Mostrar como código". Text mode (`chat/code_text.dart` `codeAsProse`):
   indentation trimmed, consecutive lines joined with a space, a list item (`- `, `* `, `• `, `1. `)
   on its own line, a blank line = paragraph break; rendered in the chat font with links, no markup
