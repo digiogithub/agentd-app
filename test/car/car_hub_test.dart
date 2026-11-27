@@ -170,6 +170,105 @@ void main() {
     expect(snaps.last['agents'], isEmpty);
     expect(snaps.last['online'], 0);
   });
+
+  test('snapshot carries canAdmin per agent and the host entries', () async {
+    hub.start();
+    await settle();
+    final agents = (hub.snapshot['agents']! as List).cast<Map<String, Object?>>();
+    expect(agents.every((a) => a['canAdmin'] == true), isTrue);
+    expect(hub.snapshot['hostEntries'], [
+      {'id': 'h1', 'name': 'estudio', 'online': true, 'canOperate': true, 'canAdmin': true},
+    ]);
+  });
+
+  test('interrupt sends Esc to the agent', () async {
+    hub.start();
+    await settle();
+    await hub.interrupt(_key);
+    expect(sessions.calls.single.method, 'interrupt');
+    expect(sessions.calls.single.session, 'codex@api');
+  });
+
+  test('interrupt is refused on a view-only device or a gone agent', () async {
+    hosts = FakeHostsRepository(hosts: [HostStatus(_relay(RelayScope.view), state: HostState.online)]);
+    hub = CarHub(hosts: hosts, sessions: sessions, board: board, debounce: Duration.zero, settleTimeout: const Duration(milliseconds: 200));
+    hub.start();
+    await settle();
+    await expectLater(hub.interrupt(_key), throwsA(isA<CarActionException>().having((e) => e.message, 'message', 'Este dispositivo solo puede mirar en ese host')));
+    await expectLater(hub.interrupt('h1/agentd/nadie@nada'), throwsA(isA<CarActionException>().having((e) => e.message, 'message', 'Ese agente ya no está')));
+    expect(sessions.calls, isEmpty);
+  });
+
+  test('projects and launch on an admin host', () async {
+    final s = _ProjectsSessions(sessions);
+    hub = CarHub(hosts: hosts, sessions: s, board: board, debounce: Duration.zero, settleTimeout: const Duration(milliseconds: 200));
+    hub.start();
+    await settle();
+    expect(await hub.projects('h1'), ['webapp', 'api']);
+    final launched = await hub.launch('h1', 'webapp', harness: 'codex', firstPrompt: '  ');
+    expect(launched.name, 'codex@webapp');
+    final c = sessions.calls.singleWhere((c) => c.method == 'launch');
+    expect(c.session, 'codex@webapp');
+    expect(c.arg, {'host': 'h1', 'where': 'agentd', 'firstPrompt': null});
+    await hub.launch('h1', 'api', firstPrompt: 'revisa los tests');
+    expect(sessions.calls.last.session, 'claude@api');
+    expect((sessions.calls.last.arg! as Map)['firstPrompt'], 'revisa los tests');
+  });
+
+  test('launch and projects need the admin scope', () async {
+    hosts = FakeHostsRepository(hosts: [HostStatus(_relay(RelayScope.operate), state: HostState.online)]);
+    hub = CarHub(hosts: hosts, sessions: sessions, board: board, debounce: Duration.zero, settleTimeout: const Duration(milliseconds: 200));
+    hub.start();
+    await settle();
+    const refused = 'Este dispositivo no puede lanzar agentes en ese host';
+    await expectLater(hub.launch('h1', 'webapp'), throwsA(isA<CarActionException>().having((e) => e.message, 'message', refused)));
+    await expectLater(hub.projects('h1'), throwsA(isA<CarActionException>().having((e) => e.message, 'message', refused)));
+    await expectLater(hub.launch('h9', 'webapp'), throwsA(isA<CarActionException>().having((e) => e.message, 'message', 'No conozco ese host')));
+    expect(sessions.calls, isEmpty);
+  });
+
+  test('a failed launch is a Spanish refusal', () async {
+    hub = CarHub(hosts: hosts, sessions: _FailingLaunch(sessions), board: board, debounce: Duration.zero, settleTimeout: const Duration(milliseconds: 200));
+    hub.start();
+    await settle();
+    await expectLater(hub.launch('h1', 'webapp'), throwsA(isA<CarActionException>().having((e) => e.message, 'message', 'Por relay usa un alias o una ruta absoluta')));
+  });
+}
+
+HostConfig _relay(RelayScope scope) => HostConfig(id: 'h1', name: 'estudio', host: '', user: '', transport: HostTransport.relay, relay: RelayHostInfo(relayUrl: 'wss://r', route: 'r', hostKey: 'k', deviceId: 'd', scope: scope));
+
+class _ProjectsSessions extends _Delegating {
+  _ProjectsSessions(super.inner);
+  @override
+  Future<List<String>> projects(String hostId) async => hostId == 'h1' ? const ['webapp', 'api'] : const [];
+}
+
+class _FailingLaunch extends _Delegating {
+  _FailingLaunch(super.inner);
+  @override
+  Future<AgentSession> launch({required String hostId, required SessionSource where, required String project, required String harness, String? firstPrompt}) async =>
+      throw ArgumentError('relative path over relay');
+}
+
+/// A [FakeSessionsRepository] seen through another class, to override one
+/// method.
+class _Delegating implements SessionsRepository {
+  _Delegating(this.inner);
+  final FakeSessionsRepository inner;
+
+  @override
+  Stream<List<AgentSession>> watch() => inner.watch();
+  @override
+  Stream<SessionView> view(AgentSession session) => inner.view(session);
+  @override
+  Future<void> interrupt(AgentSession s) => inner.interrupt(s);
+  @override
+  Future<AgentSession> launch({required String hostId, required SessionSource where, required String project, required String harness, String? firstPrompt}) =>
+      inner.launch(hostId: hostId, where: where, project: project, harness: harness, firstPrompt: firstPrompt);
+  @override
+  Future<List<String>> projects(String hostId) => inner.projects(hostId);
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _SlowBoard implements BoardRepository {

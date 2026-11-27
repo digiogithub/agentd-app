@@ -115,6 +115,12 @@ const _ordinals = <String, int>{
   'nueve': 9, 'noveno': 9, 'novena': 9, 'nine': 9,
 };
 
+/// The number a spoken word names ("3", "tres", "tercera"), or null.
+int? spokenNumber(String word) {
+  final w = normalizeSpoken(word);
+  return int.tryParse(w) ?? _ordinals[w];
+}
+
 const _yesWords = {'si', 'vale', 'ok', 'okay', 'adelante', 'aprueba', 'apruebalo', 'acepta', 'aceptar', 'permite', 'permitir', 'yes', 'claro', 'de acuerdo', 'hazlo', 'sigue', 'continua'};
 const _noWords = {'no', 'rechaza', 'rechazar', 'deniega', 'denegar', 'cancela', 'cancelar', 'para', 'nunca', 'no lo hagas'};
 const _yesLabels = ['yes', 'si', 'allow', 'approve', 'accept', 'ok', 'continue', 'proceed'];

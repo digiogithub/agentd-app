@@ -2,7 +2,8 @@
 // a snapshot of the Panel (questions, terminal menus, blocked tasks, agents)
 // pushed on every change, the messages to notify (new questions and menus),
 // and the actions a driver takes by voice or touch (answer, choose, prompt,
-// hear the conclusion or the last lines).
+// hear the conclusion or the last lines, stop an agent, launch a new one).
+// The hands-free voice mode (`lib/src/voice/`) drives the same hub.
 //
 // Pure Dart: the platform side (`car_bridge.dart`) only moves maps over a
 // MethodChannel. Never log the texts: they are agent or user writing.
@@ -34,6 +35,9 @@ class CarActionException implements Exception {
   @override
   String toString() => message;
 }
+
+/// The harness a new agent gets when none is said.
+const kVoiceDefaultHarness = 'claude';
 
 class CarHub {
   CarHub({required this.hosts, required this.sessions, required this.board, this.debounce = const Duration(milliseconds: 300), this.viewTimeout = const Duration(seconds: 10), this.settleTimeout = const Duration(seconds: 20)});
@@ -118,11 +122,16 @@ class CarHub {
     final online = [for (final h in _hosts) if (h.state == HostState.online) h.config.id];
     final panel = buildPanel(boards: [for (final id in online) ?_boards[id]], sessions: [for (final s in _sessions) if (online.contains(s.hostId)) s]);
     final agents = <Map<String, Object?>>[];
+    final hostEntries = [
+      for (final h in _hosts)
+        {'id': h.config.id, 'name': h.config.name, 'online': h.state == HostState.online, 'canOperate': h.config.canOperate, 'canAdmin': h.config.canAdmin},
+    ];
     final open = <String, CarNotice>{};
     for (final a in panel.agents) {
       final cfg = _config(a.hostId);
       final host = cfg?.name ?? a.hostId;
       final canOperate = cfg?.canOperate ?? false;
+      final canAdmin = cfg?.canAdmin ?? false;
       final live = _session(a.key);
       final menu = live?.pending;
       final blocked = [for (final t in a.tasks) if (t.status == TaskStatus.blocked) t];
@@ -137,6 +146,7 @@ class CarHub {
         'done': a.done,
         'total': a.total,
         'canOperate': canOperate,
+        'canAdmin': canAdmin,
         'blocked': [for (final t in blocked) {'title': t.title, 'note': t.note}],
         'questions': [
           for (final q in a.questions) {'id': q.id, 'body': q.body, 'headline': splitQuestion(q.body).$1, 'options': q.options},
@@ -164,7 +174,7 @@ class CarHub {
         open[tag] = CarNotice(tag: tag, sessionKey: a.key, session: a.name, host: host, title: '${a.name} $what', text: '${truncateWords(menu.question.trim(), 400)}$detail$opts');
       }
     }
-    _snapshot = {'hosts': _hosts.length, 'online': online.length, 'agents': agents};
+    _snapshot = {'hosts': _hosts.length, 'online': online.length, 'agents': agents, 'hostEntries': hostEntries};
     if (!_snapshots.isClosed) _snapshots.add(_snapshot);
     for (final tag in _noticed.difference(open.keys.toSet()).toList()) {
       _noticed.remove(tag);
@@ -216,6 +226,17 @@ class CarHub {
     if (!(_config(hostId)?.canOperate ?? false)) throw const CarActionException('Este dispositivo solo puede mirar en ese host');
   }
 
+  /// Waits (up to [settleTimeout]) until [hostId] is known.
+  Future<HostConfig?> _host(String hostId) async {
+    if (_config(hostId) == null) await hosts.watch().firstWhere((h) => h.any((x) => x.config.id == hostId)).timeout(settleTimeout, onTimeout: () => const []);
+    return _config(hostId);
+  }
+
+  void _checkAdmin(HostConfig? cfg) {
+    if (cfg == null) throw const CarActionException('No conozco ese host');
+    if (!cfg.canAdmin) throw const CarActionException('Este dispositivo no puede lanzar agentes en ese host');
+  }
+
   /// Answers question [questionId] of [hostId] with [text].
   Future<void> answer(String hostId, int questionId, String text) async {
     if (_config(hostId) == null) await hosts.watch().firstWhere((h) => h.any((x) => x.config.id == hostId)).timeout(settleTimeout, onTimeout: () => const []);
@@ -242,6 +263,44 @@ class CarHub {
     _checkOperate(s.hostId);
     if (s.status == AgentStatus.exited) throw const CarActionException('Esa sesión ha terminado');
     await sessions.prompt(s, text);
+  }
+
+  /// Stops what agent [key] is doing (Esc), like the stop button.
+  Future<void> interrupt(String key) async {
+    await _settle(key);
+    final s = _target(key);
+    _checkOperate(s.hostId);
+    if (s.status == AgentStatus.exited) throw const CarActionException('Esa sesión ha terminado');
+    await sessions.interrupt(s);
+  }
+
+  /// Project names (agentd aliases) [hostId] offers for a new agent.
+  Future<List<String>> projects(String hostId) async {
+    _checkAdmin(await _host(hostId));
+    try {
+      return await sessions.projects(hostId);
+    } on CarActionException {
+      rethrow;
+    } catch (_) {
+      throw const CarActionException('No se pudieron leer los proyectos');
+    }
+  }
+
+  /// Starts a new agentd agent [harness] in [project] of [hostId], with an
+  /// optional first instruction. Returns the new session.
+  Future<AgentSession> launch(String hostId, String project, {String harness = kVoiceDefaultHarness, String? firstPrompt}) async {
+    _checkAdmin(await _host(hostId));
+    if (project.trim().isEmpty) throw const CarActionException('Falta el proyecto');
+    try {
+      final p = firstPrompt?.trim();
+      return await sessions.launch(hostId: hostId, where: SessionSource.agentd, project: project.trim(), harness: harness, firstPrompt: p == null || p.isEmpty ? null : p);
+    } on ArgumentError {
+      throw const CarActionException('Por relay usa un alias o una ruta absoluta');
+    } on CarActionException {
+      rethrow;
+    } catch (_) {
+      throw const CarActionException('No se pudo lanzar el agente');
+    }
   }
 
   /// A dictated reply to agent [key]: it answers the oldest open question
