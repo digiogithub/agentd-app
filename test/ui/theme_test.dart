@@ -148,6 +148,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('scheme-LightScheme.cream')));
     await tester.pumpAndSettle();
     expect(AppColors.palette, same(AppPalette.mocha));
+    await tester.scrollUntilVisible(find.text('Claro'), -200);
     await tester.tap(find.text('Claro'));
     await tester.pumpAndSettle();
     expect(AppColors.palette, same(AppPalette.cream));

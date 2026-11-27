@@ -168,6 +168,15 @@ void main() {
     expect(voice.state, VoiceState.armed);
   });
 
+  test('no microphone permission: says so and exits', () async {
+    await build();
+    port.heard.add(const VoiceHeard.error('permission'));
+    await press();
+    expect(port.said, ['Necesito permiso de micrófono.']);
+    expect(port.exits, 1);
+    expect(voice.state, VoiceState.off);
+  });
+
   test('an answer is read back and sent only after "sí"', () async {
     await build(question: true);
     // The open question was announced; the press reads it.

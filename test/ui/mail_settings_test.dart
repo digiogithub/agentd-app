@@ -1,4 +1,5 @@
 import 'package:agentd_app/src/core/contracts.dart';
+import 'package:agentd_app/src/platform/background.dart';
 import 'package:agentd_app/src/ui/providers.dart';
 import 'package:agentd_app/src/ui/screens/mailbox_screen.dart';
 import 'package:agentd_app/src/ui/screens/settings_screen.dart';
@@ -74,6 +75,34 @@ void main() {
       await tester.tap(find.text('Sistema'));
       await tester.pump();
       expect(find.textContaining('llegará pronto'), findsNothing);
+    });
+
+    testWidgets('voice mode: start button and headset microphone switch', (tester) async {
+      final bg = _VoiceStarter();
+      await pumpUi(tester, const Scaffold(body: SettingsScreen()), height: 1100, extraOverrides: [backgroundBridgeProvider.overrideWithValue(bg)]);
+      final start = find.byKey(const ValueKey('voice-start'));
+      final help = find.textContaining('Hey Google, abre agentd voz');
+      await tester.scrollUntilVisible(help, 200, scrollable: find.byType(Scrollable).first);
+      expect(find.text('MODO VOZ'), findsOneWidget);
+      expect(start, findsOneWidget);
+      await tester.tap(start);
+      await tester.pump();
+      expect(bg.starts, 1);
+      expect(find.text('No se pudo activar el modo voz'), findsNothing);
+
+      final mic = find.bySemanticsLabel('Micrófono de los auriculares');
+      expect(tester.getSemantics(mic), isSemantics(isToggled: true));
+      await tester.tap(mic);
+      await tester.pump();
+      expect(tester.getSemantics(mic), isSemantics(isToggled: false));
+      final container = ProviderScope.containerOf(tester.element(start));
+      expect(container.read(settingsProvider).voiceHeadsetMic, isFalse);
+
+      bg.ok = false;
+      await tester.tap(start);
+      await tester.pump();
+      expect(bg.starts, 2);
+      expect(find.text('No se pudo activar el modo voz'), findsOneWidget);
     });
 
     testWidgets('battery saver level and installed version at the end', (tester) async {
@@ -171,4 +200,16 @@ class _FakeSpeech implements DictationService {
   ];
   @override
   Future<String?> systemLocaleId() async => null;
+}
+
+/// Records voice mode starts; [ok] is what Android answers.
+class _VoiceStarter extends NoopBackgroundBridge {
+  int starts = 0;
+  bool ok = true;
+
+  @override
+  Future<bool> startVoice() async {
+    starts++;
+    return ok;
+  }
 }

@@ -265,6 +265,10 @@ class VoiceController {
     var reprompted = false;
     while (_state != VoiceState.off) {
       final heard = await _listen(follow ? followUpMax : listenMax);
+      if (heard.error == 'permission') {
+        await _exit(text: 'Necesito permiso de micrófono.');
+        return;
+      }
       if (heard.isEmpty) {
         if (follow) return;
         if (heard.isSilence && !reprompted) {
@@ -290,8 +294,8 @@ class VoiceController {
     await _converse(followUp: !barged);
   }
 
-  Future<void> _exit() async {
-    await _say('Salgo del modo voz.', remember: false);
+  Future<void> _exit({String text = 'Salgo del modo voz.'}) async {
+    await _say(text, remember: false);
     _set(VoiceState.off);
     _idle?.cancel();
     _noticeTimer?.cancel();

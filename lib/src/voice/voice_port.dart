@@ -20,7 +20,8 @@ class VoiceHeard {
   final List<String> alts;
 
   /// `no_match` (nothing understood), `timeout` (silence), `busy`
-  /// (recognizer in use), `audio` (microphone), `network`, `other`.
+  /// (recognizer in use), `audio` (microphone), `network`, `permission`
+  /// (no microphone permission), `other`.
   final String? error;
 
   /// Nothing usable was heard.

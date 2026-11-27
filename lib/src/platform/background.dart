@@ -23,6 +23,10 @@ abstract class BackgroundBridge {
   /// already (the system dialog answers later).
   Future<bool> requestPermission();
 
+  /// Starts the hands-free voice mode (VoiceService; asks for the microphone
+  /// first when needed). False when Android refused to start it.
+  Future<bool> startVoice();
+
   /// The notification's "Desconectar" action.
   Stream<void> get disconnects;
 
@@ -88,6 +92,15 @@ class MethodChannelBackgroundBridge implements BackgroundBridge {
       return false;
     }
   }
+
+  @override
+  Future<bool> startVoice() async {
+    try {
+      return await _ch.invokeMethod<bool>('startVoice') ?? false;
+    } on PlatformException {
+      return false;
+    }
+  }
 }
 
 /// No background support (iOS, desktop, tests): every call is a no-op.
@@ -104,6 +117,8 @@ class NoopBackgroundBridge implements BackgroundBridge {
   Future<void> notify({required int id, required String title, required String text, String? session}) async {}
   @override
   Future<bool> requestPermission() async => false;
+  @override
+  Future<bool> startVoice() async => false;
 }
 
 /// The installed version, "1.11.7" (Android; empty elsewhere or on

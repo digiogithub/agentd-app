@@ -2,7 +2,9 @@
 // headless Flutter engine (`CarEngine.kt`, entry point `carMain` of
 // `main.dart`), so the car
 // works while the phone is locked and the app closed: that engine has its own
-// repositories and connections, separate from the app's.
+// repositories and connections, separate from the app's. The hands-free voice
+// mode (`voice/voice_bridge.dart`, channel `agentd/voice`) runs on the same
+// engine and hub.
 //
 // Channel `agentd/car`:
 //  Dart -> Android: `ready`, `snapshot` (map), `notify` (CarNotice map),
@@ -20,7 +22,9 @@ import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../data/data.dart';
+import '../ui/providers.dart' show PrefsSettingsStore;
 import '../ui/screens/chat_tab.dart' show sendErrorMessage;
+import '../voice/voice_bridge.dart';
 import 'car_hub.dart';
 
 /// Body of the car engine's entry point (`carMain` in `main.dart`, started by
@@ -29,6 +33,10 @@ Future<void> runCarEngine() async {
   WidgetsFlutterBinding.ensureInitialized();
   final data = AppData.create();
   final hub = CarHub(hosts: data.hosts, sessions: data.sessions, board: data.board);
+  // The voice mode shares the hub; its handler must exist before `ready`
+  // releases the calls queued natively. Settings are read from the app's
+  // store at each start (the app writes them in its own engine).
+  VoiceBridge(hub, headsetMic: () async => (await PrefsSettingsStore().load()).voiceHeadsetMic).start();
   CarBridge(hub).start();
 }
 

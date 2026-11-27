@@ -153,6 +153,7 @@ class AppSettings {
     this.batterySaver = BatterySaver.low,
     this.darkScheme = DarkScheme.standard,
     this.lightScheme = LightScheme.standard,
+    this.voiceHeadsetMic = true,
   });
 
   final bool notifyWaiting;
@@ -191,6 +192,10 @@ class AppSettings {
   final DarkScheme darkScheme;
   final LightScheme lightScheme;
 
+  /// Voice mode: listen through the headset microphone (call quality while
+  /// listening); false = the phone's microphone.
+  final bool voiceHeadsetMic;
+
   AppSettings copyWith({
     bool? notifyWaiting,
     bool? notifyTurnDone,
@@ -208,6 +213,7 @@ class AppSettings {
     BatterySaver? batterySaver,
     DarkScheme? darkScheme,
     LightScheme? lightScheme,
+    bool? voiceHeadsetMic,
   }) => AppSettings(
     notifyWaiting: notifyWaiting ?? this.notifyWaiting,
     notifyTurnDone: notifyTurnDone ?? this.notifyTurnDone,
@@ -225,6 +231,7 @@ class AppSettings {
     batterySaver: batterySaver ?? this.batterySaver,
     darkScheme: darkScheme ?? this.darkScheme,
     lightScheme: lightScheme ?? this.lightScheme,
+    voiceHeadsetMic: voiceHeadsetMic ?? this.voiceHeadsetMic,
   );
 }
 
@@ -284,6 +291,7 @@ extension AppSettingsJson on AppSettings {
     'batterySaver': batterySaver.name,
     'darkScheme': darkScheme.name,
     'lightScheme': lightScheme.name,
+    'voiceHeadsetMic': voiceHeadsetMic,
   };
 }
 
@@ -320,6 +328,7 @@ AppSettings appSettingsFromJson(Object? json, {AppSettings fallback = const AppS
     batterySaver: BatterySaver.values.where((l) => l.name == json['batterySaver']).firstOrNull ?? fallback.batterySaver,
     darkScheme: DarkScheme.values.where((x) => x.name == json['darkScheme']).firstOrNull ?? fallback.darkScheme,
     lightScheme: LightScheme.values.where((x) => x.name == json['lightScheme']).firstOrNull ?? fallback.lightScheme,
+    voiceHeadsetMic: b('voiceHeadsetMic', fallback.voiceHeadsetMic),
   );
 }
 

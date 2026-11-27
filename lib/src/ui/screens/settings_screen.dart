@@ -1,5 +1,5 @@
 // Settings: notifications, muted sessions, security, paired devices,
-// appearance.
+// appearance, voice mode.
 
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -294,6 +294,47 @@ class SettingsScreen extends ConsumerWidget {
                 const SizedBox(height: 8),
                 Text('"Sistema" usa el esquema oscuro o el claro según el modo del teléfono.', style: AppText.caption),
                 const SizedBox(height: 18),
+                const SectionLabel('Modo voz'),
+                const SizedBox(height: 8),
+                group([
+                  Semantics(
+                    container: true,
+                    button: true,
+                    label: 'Activar modo voz',
+                    excludeSemantics: true,
+                    child: InkWell(
+                      key: const ValueKey('voice-start'),
+                      onTap: () => _startVoice(context, ref),
+                      child: Container(
+                        constraints: const BoxConstraints(minHeight: 52),
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.divider))),
+                        child: Row(
+                          children: [
+                            Icon(Icons.headset_mic_outlined, size: 18, color: AppColors.secondary),
+                            const SizedBox(width: 10),
+                            Expanded(child: Text('Activar modo voz', style: AppFonts.inter(size: 14.5))),
+                            Icon(Icons.chevron_right, size: 16, color: AppColors.muted),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  SwitchRow(
+                    key: const ValueKey('voice-headset-mic'),
+                    title: 'Micrófono de los auriculares',
+                    subtitle: 'Calidad de llamada mientras escucha. Apagado: micrófono del teléfono.',
+                    value: s.voiceHeadsetMic,
+                    onChanged: (v) => n.update((x) => x.copyWith(voiceHeadsetMic: v)),
+                  ),
+                ]),
+                const SizedBox(height: 8),
+                Text(
+                  'Habla con tus agentes con auriculares Bluetooth. También desde el icono "agentd voz" o con '
+                  '"Hey Google, abre agentd voz". Una pulsación: hablar; dos: repetir. Di "ayuda" para oír las órdenes.',
+                  style: AppText.caption,
+                ),
+                const SizedBox(height: 18),
                 const SectionLabel('Ahorro de batería'),
                 const SizedBox(height: 8),
                 SegmentedControl<BatterySaver>(
@@ -323,6 +364,12 @@ class SettingsScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _startVoice(BuildContext context, WidgetRef ref) async {
+    final ok = await ref.read(backgroundBridgeProvider).startVoice();
+    if (ok || !context.mounted) return;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(content: Text('No se pudo activar el modo voz')));
   }
 
   /// A list of color schemes with a sample of each; picking one applies it.

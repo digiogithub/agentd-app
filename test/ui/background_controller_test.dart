@@ -37,6 +37,12 @@ class _Bridge implements BackgroundBridge {
     calls.add('permission');
     return true;
   }
+
+  @override
+  Future<bool> startVoice() async {
+    calls.add('voice');
+    return true;
+  }
 }
 
 class _Sessions implements SessionsRepository {

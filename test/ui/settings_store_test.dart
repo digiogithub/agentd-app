@@ -46,6 +46,13 @@ void main() {
     expect(PowerTuning.of(BatterySaver.medium).suspendAfter, lessThan(PowerTuning.of(BatterySaver.low).suspendAfter));
   });
 
+  test('voice headset mic round trips; missing or broken is on', () {
+    expect(appSettingsFromJson(const AppSettings(voiceHeadsetMic: false, muted: []).toJson()).voiceHeadsetMic, isFalse);
+    expect(appSettingsFromJson(<String, Object?>{}).voiceHeadsetMic, isTrue);
+    expect(appSettingsFromJson({'voiceHeadsetMic': 'no'}).voiceHeadsetMic, isTrue);
+    expect(const AppSettings().copyWith(voiceHeadsetMic: false).voiceHeadsetMic, isFalse);
+  });
+
   test('broken or missing settings fall back to defaults without sample mutes', () {
     expect(appSettingsFromJson(null).muted, isEmpty);
     final s = appSettingsFromJson({'theme': 'neon', 'notifyWaiting': 'yes', 'muted': 3});
