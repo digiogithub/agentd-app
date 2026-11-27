@@ -18,6 +18,8 @@ class VoiceEarcons(private val audio: VoiceAudio) {
     private val main = Handler(Looper.getMainLooper())
     private var track: AudioTrack? = null
     private var end: Runnable? = null
+    /** The pending caller of [play]: answered when the tone ends or is cut. */
+    private var pending: (() -> Unit)? = null
 
     /** Plays [kind]; [done] runs when it has played (or at once for an unknown kind). */
     fun play(kind: String, done: () -> Unit) {
@@ -44,10 +46,10 @@ class VoiceEarcons(private val audio: VoiceAudio) {
         audio.acquireSpeakFocus()
         t.write(pcm, 0, pcm.size)
         t.play()
+        pending = done
         val r = Runnable {
             end = null
             stop()
-            done()
         }
         end = r
         main.postDelayed(r, pcm.size * 1000L / RATE + 60)
@@ -56,6 +58,8 @@ class VoiceEarcons(private val audio: VoiceAudio) {
     fun stop() {
         end?.let { main.removeCallbacks(it) }
         end = null
+        // A cut tone still answers its caller (Dart awaits the earcon call).
+        pending?.let { pending = null; it() }
         val t = track ?: return
         track = null
         try {

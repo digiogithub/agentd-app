@@ -125,6 +125,15 @@ AMOLED black, Solarized, Nord, Gruvbox, Dracula; light: default, Cream, Latte, S
 Ajustes > **Ahorro de batería** (Bajo, Medio, Alto) stretches those intervals and disconnects sooner;
 the installed version is shown below it.
 
+## Voice mode (Bluetooth headphones)
+
+Hands-free use without looking at the screen: the launcher icon **agentd voz** (or "Hey Google,
+abre agentd voz", or Ajustes > Modo voz) starts it. One headphone press talks, a double press
+repeats. Say "agentes", "pendientes", "conclusión", "opciones", "opción dos", "dicta …",
+"nuevo agente en <proyecto>", "para", "ayuda" or "salir"; every send is read back and confirmed.
+Google TTS and speech recognition, headset mic while listening. Details and limits:
+`docs/voice-mode.md`.
+
 ## Android Auto
 
 The Panel on the car screen: agents waiting for a decision (listen and answer by voice), blocked

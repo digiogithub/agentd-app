@@ -15,13 +15,15 @@ agentd-relay. Humans: see `README.md`. Architecture and decisions: `docs/plan.md
 | `lib/src/agentd/` | daemon wire protocol: `AgentdClient` (ops), events, attach, mapping to contracts |
 | `lib/src/mux/` | zellij and tmux adapters |
 | `lib/src/provision/` | host detection and installs |
+| `lib/src/voice/` | hands-free voice mode: `VoicePort`, grammar, `VoiceController` (state machine), channel bridge `agentd/voice` (`docs/voice-mode.md`) |
 | `lib/src/car/` | Android Auto: `CarHub` (snapshot, voice reply, conclusion), `CarBridge` (channel `agentd/car`, engine body), text helpers |
+| `android/app/src/main/kotlin/.../voice/` | voice mode native side: foreground service, media buttons, TTS to file + own player, SpeechRecognizer, SCO mic, launcher alias "agentd voz" |
 | `android/app/src/main/kotlin/.../car/` | Android Auto native side: headless `CarEngine`, car app service and screens, messaging notifications, push receiver |
 | `lib/src/data/` | real repositories (`AppData.create`): hosts, sessions, mail, board (with backlog notes), devices |
 | `lib/src/ui/` | theme, providers, screens, widgets, `fakes/` (sample data of the mockups) |
 | `test/` | mirrors `lib/src/`; `test/agentd/fake_daemon.dart` is the fake daemon |
 | `scripts/release.sh` | build, check and publish the GitHub Release of a tag |
-| `docs/` | `plan.md` (architecture, per-feature notes), `signing.md`, `push.md` (FCM, Firebase config), `android-auto.md` |
+| `docs/` | `plan.md` (architecture, per-feature notes), `signing.md`, `push.md` (FCM, Firebase config), `android-auto.md`, `voice-mode.md` |
 
 ## Commands
 
@@ -68,6 +70,7 @@ is outward-facing: only with José's direct OK.
 
 ## Do not
 
+- Put logic in the Kotlin voice classes: commands, routing and confirmations live in `lib/src/voice/`.
 - Put logic in the Kotlin car screens: decisions (option matching, routing a reply) live in
   `lib/src/car/` where they are tested; Kotlin only draws the snapshot and forwards calls.
 

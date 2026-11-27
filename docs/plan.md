@@ -385,6 +385,17 @@ relay; in the background it should only get the questions).
 - Tests: `test/ui/background_controller_test.dart` (suspend, level), `test/ui/push_controller_test.dart`
   (`pushHosts`), `test/ui/settings_store_test.dart`, `test/ui/mail_settings_test.dart` (control, version).
 
+## Voice mode
+
+Added on 2026-11-27, version 1.13.0 (José: drive every agent through Bluetooth headphones with
+Google's native speech, a headphone button for commands). Design, channel, limits and the manual
+test: `docs/voice-mode.md`. Built in packages: Dart core (grammar + controller over `CarHub`), Kotlin
+native service, bridge + settings (`AppSettings.voiceHeadsetMic`, Ajustes > Modo voz), docs.
+Decisions taken on the recommendations (José may revisit): one press talks / double repeats; every
+send confirmed ("¿Envío?"); headset mic by default; default harness claude; idle exit after 20 min;
+no App Actions (Play) for now; announcements duck the music. Not field-tested yet: button routing
+with other players, SCO capture by the Google recognizer, the lock screen.
+
 ## Android Auto
 
 Added on 2026-11-25, version 1.10.0. Full notes: `docs/android-auto.md`.
