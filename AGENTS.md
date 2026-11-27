@@ -20,6 +20,7 @@ agentd-relay. Humans: see `README.md`. Architecture and decisions: `docs/plan.md
 | `lib/src/data/` | real repositories (`AppData.create`): hosts, sessions, mail, board (with backlog notes), devices |
 | `lib/src/ui/` | theme, providers, screens, widgets, `fakes/` (sample data of the mockups) |
 | `test/` | mirrors `lib/src/`; `test/agentd/fake_daemon.dart` is the fake daemon |
+| `scripts/release.sh` | build, check and publish the GitHub Release of a tag |
 | `docs/` | `plan.md` (architecture, per-feature notes), `signing.md`, `push.md` (FCM, Firebase config), `android-auto.md` |
 
 ## Commands
@@ -33,6 +34,15 @@ flutter build apk --debug
 ```
 
 On machines with Sluice, run the checks through its `verify` tool instead of the shell.
+
+## Release
+
+After pushing a `v*` tag, run `scripts/release.sh` (or `--dry-run` to build and check only): signed
+split APKs in `dist/release-<version>/` (gitignored) published as the latest GitHub Release. The agentd
+website matches the asset names `agentd-app-<version>-<abi>.apk` and `SHA256SUMS`: do not rename them.
+The script refuses an untagged or dirty HEAD, a tag that differs from `pubspec.yaml` or is not on origin,
+an existing release, and a missing `android/key.properties` (never ship debug-signed APKs). Publishing
+is outward-facing: only with José's direct OK.
 
 ## Conventions
 

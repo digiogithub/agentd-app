@@ -34,6 +34,11 @@ flutter build appbundle --release          # build/app/outputs/bundle/release/ap
 flutter build apk --release --split-per-abi  # sideload / GitHub release APKs
 ```
 
+GitHub releases: `scripts/release.sh [--dry-run] [vX.Y.Z]` builds the split APKs of the tag on HEAD,
+refuses without `key.properties`, checks the upload key fingerprint above with `apksigner` and
+publishes `agentd-app-<version>-<abi>.apk` + `SHA256SUMS` as the latest release (the agentd website
+links it).
+
 Check a build: `apksigner verify --print-certs <apk>` or `keytool -printcert -jarfile <aab>` must show
 the fingerprint above.
 

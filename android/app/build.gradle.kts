@@ -12,7 +12,7 @@ if (file("google-services.json").exists()) {
     apply(plugin = "com.google.gms.google-services")
 }
 
-// Release signing: android/key.properties (gitignored; see docs/release.md).
+// Release signing: android/key.properties (gitignored; see docs/signing.md).
 // Without it, release builds fall back to the debug key.
 val keystoreProperties = Properties().apply {
     val f = rootProject.file("key.properties")

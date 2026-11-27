@@ -29,6 +29,15 @@ flutter build apk --debug
 Tests never run real agent CLIs or installers; the data layer is tested against a fake daemon
 and fake remote shells.
 
+## Release
+
+After pushing a `vX.Y.Z` tag (same version as `pubspec.yaml`), run `scripts/release.sh` on the tagged
+commit. It builds the split APKs signed with the upload key (`android/key.properties`,
+`docs/signing.md`), writes `dist/release-<version>/` (`agentd-app-<version>-<abi>.apk`, `SHA256SUMS`,
+notes from the commits since the previous tag) and publishes them as the latest GitHub Release.
+The agentd website links the latest GitHub Release automatically, so keep the asset names.
+`scripts/release.sh --dry-run` builds and checks without publishing.
+
 ## One prompt to several agents
 
 In the Agentes tab, the checklist button of the header (**Seleccionar varios**) turns the list
