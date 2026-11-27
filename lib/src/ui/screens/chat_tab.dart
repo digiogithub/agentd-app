@@ -48,11 +48,39 @@ class _ChatTabState extends ConsumerState<ChatTab> {
   bool _follow = true;
   // Code blocks of this view shown as text (in memory only).
   final _codeAsText = <String>{};
+  // The composer has the focus: its buttons move to a bar below the input,
+  // which then takes the whole width.
+  bool _focused = false;
+  bool _interrupting = false;
+  // Kept across the two layouts: a running dictation and the field survive
+  // the move.
+  final _fieldKey = GlobalKey();
+  final _micKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
+    _focused = widget.composerFocus.hasFocus;
+    widget.composerFocus.addListener(_onFocus);
+  }
+
+  void _onFocus() {
+    final f = widget.composerFocus.hasFocus;
+    if (f != _focused && mounted) setState(() => _focused = f);
+  }
+
+  /// Stop: Esc to the agent (op act interrupt), as the terminal's button.
+  Future<void> _interrupt() async {
+    if (_interrupting) return;
+    setState(() => _interrupting = true);
+    try {
+      await ref.read(sessionsRepositoryProvider).interrupt(widget.session);
+    } catch (_) {
+      if (mounted) showToast(context, 'No se pudo detener al agente');
+    } finally {
+      if (mounted) setState(() => _interrupting = false);
+    }
   }
 
   void _onScroll() {
@@ -84,6 +112,7 @@ class _ChatTabState extends ConsumerState<ChatTab> {
   @override
   void dispose() {
     _scroll.removeListener(_onScroll);
+    widget.composerFocus.removeListener(_onFocus);
     _attachments.dispose();
     _input.dispose();
     _scroll.dispose();
@@ -135,6 +164,11 @@ class _ChatTabState extends ConsumerState<ChatTab> {
   }
 
   Future<void> _pickSource() async {
+    final host = ref.read(hostConfigProvider(widget.session.hostId));
+    if (!(host?.hasShell ?? true)) {
+      showToast(context, 'Adjuntar imágenes en hosts por relay necesita una versión de agentd que aún no está disponible');
+      return;
+    }
     if (_attachments.remaining <= 0) {
       showToast(context, 'Máximo $kMaxAttachments imágenes por mensaje');
       return;
@@ -211,6 +245,107 @@ class _ChatTabState extends ConsumerState<ChatTab> {
     } catch (_) {
       if (mounted) showToast(context, 'El menú cambió: revisa la pregunta actualizada');
     }
+  }
+
+  /// The input and its buttons: attach, dictation, stop (while the agent
+  /// works) and send. Unfocused they sit around the input; focused they move
+  /// to a bar below it, so the text gets the whole width.
+  Widget _composer() {
+    final working = widget.session.status == AgentStatus.working;
+    final attach = RoundIconButton(
+      key: const ValueKey('attach-button'),
+      icon: Icons.add_photo_alternate_outlined,
+      label: 'Adjuntar imagen',
+      bg: AppColors.surface,
+      border: AppColors.border,
+      fg: AppColors.secondary,
+      iconSize: 20,
+      onPressed: _sending ? null : _pickSource,
+    );
+    final mic = DictationButton(key: _micKey, controller: _input, focusNode: widget.composerFocus);
+    final stop = RoundIconButton(
+      key: const ValueKey('stop-button'),
+      icon: Icons.stop_rounded,
+      label: 'Detener (Esc)',
+      bg: AppColors.dangerBg,
+      border: AppColors.dangerBorder,
+      fg: AppColors.danger,
+      iconSize: 22,
+      onPressed: _interrupting ? null : _interrupt,
+    );
+    final send = Stack(
+      alignment: Alignment.center,
+      children: [
+        RoundIconButton(
+          icon: Icons.arrow_upward,
+          label: _sending ? 'Enviando' : 'Enviar',
+          bg: AppColors.accent,
+          fg: AppColors.bg,
+          iconSize: 20,
+          onPressed: _sending ? null : _send,
+        ),
+        if (_progress != null)
+          IgnorePointer(
+            child: SizedBox(
+              width: 44,
+              height: 44,
+              child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.bg),
+            ),
+          ),
+      ],
+    );
+    final field = TextField(
+      key: const ValueKey('composer'),
+      controller: _input,
+      focusNode: widget.composerFocus,
+      minLines: 1,
+      maxLines: _focused ? 8 : 5,
+      textInputAction: TextInputAction.send,
+      onSubmitted: (_) => _send(),
+      style: AppFonts.inter(size: 14.5),
+      decoration: AppTextField.decoration(
+        hint: 'Mensaje, / comandos, @ ficheros',
+        radius: 22,
+        padding: EdgeInsets.fromLTRB(16, 12, _focused ? 16 : 6, 12),
+      ).copyWith(
+        semanticCounterText: 'Mensaje para el agente',
+        hintMaxLines: 1,
+        suffixIcon: _focused ? null : mic,
+      ),
+    );
+    final input = KeyedSubtree(key: _fieldKey, child: field);
+    if (_focused) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          input,
+          const SizedBox(height: 8),
+          Row(
+            key: const ValueKey('composer-bar'),
+            children: [
+              attach,
+              const SizedBox(width: 8),
+              SizedBox(width: 44, height: 44, child: Center(child: mic)),
+              const Spacer(),
+              if (working) ...[stop, const SizedBox(width: 8)],
+              send,
+            ],
+          ),
+        ],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        attach,
+        const SizedBox(width: 8),
+        Expanded(child: input),
+        const SizedBox(width: 8),
+        if (working) ...[stop, const SizedBox(width: 8)],
+        send,
+      ],
+    );
   }
 
   @override
@@ -358,71 +493,7 @@ class _ChatTabState extends ConsumerState<ChatTab> {
                         ],
                       ),
               ),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  // Images are copied over the host's shell: SSH hosts only.
-                  if (host?.hasShell ?? true) ...[
-                    RoundIconButton(
-                      icon: Icons.add,
-                      label: 'Adjuntar imagen',
-                      bg: AppColors.surface,
-                      border: AppColors.border,
-                      fg: AppColors.secondary,
-                      iconSize: 20,
-                      onPressed: _sending ? null : _pickSource,
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  Expanded(
-                    child: TextField(
-                      key: const ValueKey('composer'),
-                      controller: _input,
-                      focusNode: widget.composerFocus,
-                      minLines: 1,
-                      maxLines: 5,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _send(),
-                      style: AppFonts.inter(size: 14.5),
-                      decoration:
-                          AppTextField.decoration(
-                            hint: 'Mensaje, / comandos, @ ficheros',
-                            radius: 22,
-                            padding: const EdgeInsets.fromLTRB(16, 12, 6, 12),
-                          ).copyWith(
-                            semanticCounterText: 'Mensaje para el agente',
-                            hintMaxLines: 1,
-                            suffixIcon: DictationButton(controller: _input, focusNode: widget.composerFocus),
-                          ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      RoundIconButton(
-                        icon: Icons.arrow_upward,
-                        label: _sending ? 'Enviando' : 'Enviar',
-                        bg: AppColors.accent,
-                        fg: AppColors.bg,
-                        iconSize: 20,
-                        onPressed: _sending ? null : _send,
-                      ),
-                      if (_progress != null)
-                        IgnorePointer(
-                          child: SizedBox(
-                            width: 44,
-                            height: 44,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: AppColors.bg,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
+              _composer(),
             ],
           ),
         ),

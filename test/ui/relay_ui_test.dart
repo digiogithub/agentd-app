@@ -252,12 +252,16 @@ void main() {
     expect(find.text('Observar'), findsNothing);
   });
 
-  testWidgets('operate scope: composer without images, no Terminar', (tester) async {
+  testWidgets('operate scope: images say relay is not supported yet, no Terminar', (tester) async {
     final fakes = await _relayFakes('estudio', RelayScope.operate);
     await pumpUi(tester, SessionScreen(session: _session('claude@webapp')), fakes: fakes);
     await settle(tester);
     expect(find.byKey(const ValueKey('composer')), findsOneWidget);
-    expect(find.bySemanticsLabel('Adjuntar imagen'), findsNothing);
+    // Shown, but a relay host cannot take the file yet: it says so.
+    await tester.tap(find.bySemanticsLabel('Adjuntar imagen'));
+    await tester.pump();
+    expect(find.textContaining('hosts por relay'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
     await _openMore(tester);
     expect(find.text('Terminar'), findsNothing);
     expect(find.text('Interrumpir'), findsOneWidget);
