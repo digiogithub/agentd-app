@@ -102,7 +102,7 @@ the dictation button keep GlobalKeys, so text and a running dictation survive th
 (`stop-button`, Esc through `act interrupt`) shows while the agent is working. The attach button is
 always shown. Uploads go through the daemon when its `info.features` has `upload` (agentd 0.12+,
 contract from the agentd agent, msg #1640, 2026-11-27: op `upload {name, ext, data base64}` ->
-`{path, size}`, 1..6 MiB, png/jpg/jpeg/webp/gif, file in the daemon's state dir, relay scope operate+),
+`{path, size}`, 1..6,000,000 bytes, png/jpg/jpeg/webp/gif, file in the daemon's state dir, relay scope operate+),
 on SSH and relay hosts alike; otherwise over the SSH shell as before. A relay host whose daemon lacks
 the feature says that it needs agentd 0.12 (`SessionsRepository.canUploadImages`, info cached 30 s).
 

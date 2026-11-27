@@ -107,8 +107,9 @@ class AgentdClient {
 
   Future<AgentdInfo> info() async => AgentdInfo.fromJson(await _callMap('info'));
 
-  /// Largest file op upload takes (decoded bytes, agentd proto.MaxUploadBytes).
-  static const maxUploadBytes = 6 << 20;
+  /// Largest file op upload takes (decoded bytes, agentd proto.MaxUploadBytes:
+  /// 6,000,000, so the base64 line fits the 8 MiB wire limit).
+  static const maxUploadBytes = 6000000;
 
   /// Writes an image for session [name] in the daemon's uploads dir and
   /// answers its path (op upload, agentd 0.12+, `info.features` "upload").

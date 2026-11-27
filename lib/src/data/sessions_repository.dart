@@ -373,7 +373,7 @@ class LiveSessionsRepository implements SessionsRepository {
     }
     final ext = extension.toLowerCase();
     if (s.source == SessionSource.agentd && await _daemonUploads(s.hostId)) {
-      if (bytes.length > AgentdClient.maxUploadBytes) throw StateError('la imagen pasa de 6 MiB');
+      if (bytes.length > AgentdClient.maxUploadBytes) throw StateError('la imagen pasa de 6 MB');
       final c = await _clientOf(s);
       return (await c.upload(s.name, ext: ext, data: bytes)).path;
     }
