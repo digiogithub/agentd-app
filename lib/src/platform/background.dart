@@ -7,6 +7,9 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
+/// Answer of [BackgroundBridge.startVoice].
+enum VoiceStart { ok, noBluetooth, refused }
+
 abstract class BackgroundBridge {
   /// Shows (or updates) the persistent "connected" notification and keeps the
   /// app process alive. False when the system refused (Android 12+ does not
@@ -24,8 +27,8 @@ abstract class BackgroundBridge {
   Future<bool> requestPermission();
 
   /// Starts the hands-free voice mode (VoiceService; asks for the microphone
-  /// first when needed). False when Android refused to start it.
-  Future<bool> startVoice();
+  /// first when needed). Only with Bluetooth audio connected.
+  Future<VoiceStart> startVoice();
 
   /// The notification's "Desconectar" action.
   Stream<void> get disconnects;
@@ -94,11 +97,15 @@ class MethodChannelBackgroundBridge implements BackgroundBridge {
   }
 
   @override
-  Future<bool> startVoice() async {
+  Future<VoiceStart> startVoice() async {
     try {
-      return await _ch.invokeMethod<bool>('startVoice') ?? false;
+      return switch (await _ch.invokeMethod<Object?>('startVoice')) {
+        'ok' || true => VoiceStart.ok,
+        'no_bluetooth' => VoiceStart.noBluetooth,
+        _ => VoiceStart.refused,
+      };
     } on PlatformException {
-      return false;
+      return VoiceStart.refused;
     }
   }
 }
@@ -118,7 +125,7 @@ class NoopBackgroundBridge implements BackgroundBridge {
   @override
   Future<bool> requestPermission() async => false;
   @override
-  Future<bool> startVoice() async => false;
+  Future<VoiceStart> startVoice() async => VoiceStart.refused;
 }
 
 /// The installed version, "1.11.7" (Android; empty elsewhere or on

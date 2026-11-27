@@ -12,6 +12,7 @@ import androidx.car.app.connection.CarConnection
 import androidx.lifecycle.Observer
 import dev.digio.agentd_app.car.CarEngine
 import dev.digio.agentd_app.car.CarNotifications
+import dev.digio.agentd_app.voice.VoiceAudio
 import dev.digio.agentd_app.voice.VoiceService
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -132,13 +133,14 @@ class MainActivity : FlutterActivity() {
     private var voicePending = false
 
     /** Voice mode from the app (foreground): with the microphone permission asked first. */
-    private fun startVoice(): Boolean {
+    private fun startVoice(): String {
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             return VoiceService.start(this, "app")
         }
+        if (!VoiceAudio(this).bluetoothConnected()) return VoiceService.START_NO_BLUETOOTH
         voicePending = true
         requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), VOICE_PERMISSION)
-        return true
+        return VoiceService.START_OK
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {

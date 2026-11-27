@@ -73,7 +73,8 @@ void main() {
       {'id': 'o1', 'label': 'Yes'},
       {'id': 'o2', 'label': 'No'},
     ]);
-    expect(notices.map((n) => n.tag), unorderedEquals(['q/h1/41', 'm/$_menuKey/7']));
+    expect(notices.map((n) => n.tag).where((t) => t.startsWith('q/')), ['q/h1/41']);
+    expect(notices.where((n) => n.tag.startsWith('m/$_menuKey/')), hasLength(1));
     final q = notices.firstWhere((n) => n.tag == 'q/h1/41');
     expect(q.title, 'codex@api te pregunta');
     expect(q.text, contains('Opciones: 1, Migración en caliente. 2, Ventana de mantenimiento.'));
@@ -81,6 +82,27 @@ void main() {
 
     hub.rebuild();
     expect(notices, hasLength(2));
+  });
+
+  test('a redraw of the same menu (new view revision) is not a new notice', () async {
+    final notices = <CarNotice>[];
+    final cancels = <String>[];
+    hub.notices.listen(notices.add);
+    hub.cancels.listen(cancels.add);
+    hub.start();
+    await settle();
+    final menu = _menuSession();
+    sessions.put(AgentSession(
+      hostId: 'h1',
+      source: SessionSource.agentd,
+      name: menu.name,
+      status: menu.status,
+      pending: PendingInteraction(question: menu.pending!.question, kind: menu.pending!.kind, detail: menu.pending!.detail, revision: 8, epoch: 'e1', options: menu.pending!.options),
+      updatedAt: menu.updatedAt,
+    ));
+    await settle();
+    expect(notices.where((n) => n.tag.startsWith('m/')), hasLength(1));
+    expect(cancels, isEmpty);
   });
 
   test('a closed question cancels its notice', () async {

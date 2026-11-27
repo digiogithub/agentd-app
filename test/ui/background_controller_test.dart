@@ -39,10 +39,7 @@ class _Bridge implements BackgroundBridge {
   }
 
   @override
-  Future<bool> startVoice() async {
-    calls.add('voice');
-    return true;
-  }
+  Future<VoiceStart> startVoice() async => VoiceStart.ok;
 }
 
 class _Sessions implements SessionsRepository {

@@ -210,6 +210,13 @@ class FakeSessionsRepository implements SessionsRepository {
 
   AgentSession? byKey(String key) => _sessions[key];
 
+  /// Replaces (or adds) a session and notifies the watchers (tests: a status
+  /// or menu change coming from the host).
+  void put(AgentSession s) {
+    _sessions[s.key] = s;
+    _changes.add(null);
+  }
+
   @override
   Stream<List<AgentSession>> watch() => _replay(() => List<AgentSession>.unmodifiable(_sessions.values), _changes.stream);
 

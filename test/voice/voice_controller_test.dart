@@ -358,6 +358,19 @@ void main() {
     expect(voice.current, _apiKey);
   });
 
+  test('an item that keeps coming back is announced twice at most', () async {
+    await build();
+    for (var i = 0; i < 4; i++) {
+      board.set(_board(question: true));
+      await settle();
+      await voice.whenIdle();
+      board.set(_board());
+      await settle();
+      await voice.whenIdle();
+    }
+    expect(port.said.where((t) => t == 'codex de api pregunta. Pulsa para oír.'), hasLength(2));
+  });
+
   test('several open items at start are announced together', () async {
     hosts = FakeHostsRepository(hosts: const [HostStatus(_host, state: HostState.online)]);
     sessions = FakeSessionsRepository(sessions: [_api(), _web(menu: true)]);

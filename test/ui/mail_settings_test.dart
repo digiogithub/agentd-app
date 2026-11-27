@@ -98,11 +98,18 @@ void main() {
       final container = ProviderScope.containerOf(tester.element(start));
       expect(container.read(settingsProvider).voiceHeadsetMic, isFalse);
 
-      bg.ok = false;
+      bg.answer = VoiceStart.refused;
       await tester.tap(start);
       await tester.pump();
       expect(bg.starts, 2);
       expect(find.text('No se pudo activar el modo voz'), findsOneWidget);
+
+      // Without headphones it says what is missing.
+      bg.answer = VoiceStart.noBluetooth;
+      await tester.pump(const Duration(seconds: 5));
+      await tester.tap(start);
+      await tester.pump();
+      expect(find.text('Conecta unos auriculares Bluetooth para usar el modo voz'), findsOneWidget);
     });
 
     testWidgets('battery saver level and installed version at the end', (tester) async {
@@ -205,11 +212,11 @@ class _FakeSpeech implements DictationService {
 /// Records voice mode starts; [ok] is what Android answers.
 class _VoiceStarter extends NoopBackgroundBridge {
   int starts = 0;
-  bool ok = true;
+  VoiceStart answer = VoiceStart.ok;
 
   @override
-  Future<bool> startVoice() async {
+  Future<VoiceStart> startVoice() async {
     starts++;
-    return ok;
+    return answer;
   }
 }

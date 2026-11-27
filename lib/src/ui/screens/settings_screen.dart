@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/contracts.dart';
+import '../../platform/background.dart' show VoiceStart;
 import '../providers.dart';
 import '../theme.dart';
 import '../widgets/chat_font_controls.dart';
@@ -367,9 +368,10 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   Future<void> _startVoice(BuildContext context, WidgetRef ref) async {
-    final ok = await ref.read(backgroundBridgeProvider).startVoice();
-    if (ok || !context.mounted) return;
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(content: Text('No se pudo activar el modo voz')));
+    final r = await ref.read(backgroundBridgeProvider).startVoice();
+    if (r == VoiceStart.ok || !context.mounted) return;
+    final text = r == VoiceStart.noBluetooth ? 'Conecta unos auriculares Bluetooth para usar el modo voz' : 'No se pudo activar el modo voz';
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(text)));
   }
 
   /// A list of color schemes with a sample of each; picking one applies it.

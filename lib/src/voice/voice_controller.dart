@@ -159,9 +159,18 @@ class VoiceController {
     }
   }
 
+  /// Times each item was announced (by session and text): at most
+  /// [maxAnnouncements], so an item that comes back never loops.
+  final _announceCount = <String, int>{};
+  static const maxAnnouncements = 2;
+
   void _onNotice(CarNotice n) {
     if (_state == VoiceState.off) return;
     if (_queued.any((q) => q.tag == n.tag) || _announced.any((q) => q.tag == n.tag)) return;
+    final id = '${n.sessionKey}|${n.title}|${n.text}';
+    final times = _announceCount[id] ?? 0;
+    if (times >= maxAnnouncements) return;
+    _announceCount[id] = times + 1;
     _queued.add(n);
     _noticeTimer ??= _timer(noticeDelay, () {
       _noticeTimer = null;

@@ -34,8 +34,10 @@ class VoiceActivity : Activity() {
     }
 
     private fun startVoice() {
-        if (!VoiceService.start(applicationContext, "launcher")) {
-            Toast.makeText(this, "No se pudo iniciar el modo voz", Toast.LENGTH_LONG).show()
+        when (VoiceService.start(applicationContext, "launcher")) {
+            VoiceService.START_NO_BLUETOOTH ->
+                Toast.makeText(this, "Conecta unos auriculares Bluetooth para usar el modo voz", Toast.LENGTH_LONG).show()
+            VoiceService.START_REFUSED -> Toast.makeText(this, "No se pudo iniciar el modo voz", Toast.LENGTH_LONG).show()
         }
         // Stay visible a moment: the service enters the foreground while we are on screen.
         main.postDelayed({ finish() }, 600)

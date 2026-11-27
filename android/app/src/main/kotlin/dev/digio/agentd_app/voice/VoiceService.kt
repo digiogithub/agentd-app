@@ -48,15 +48,24 @@ class VoiceService : Service() {
         var running = false
             private set
 
-        /** Starts the voice mode from the foreground; false if Android refuses. */
-        fun start(ctx: Context, source: String): Boolean {
+        /** Answers of [start]. */
+        const val START_OK = "ok"
+        const val START_NO_BLUETOOTH = "no_bluetooth"
+        const val START_REFUSED = "refused"
+
+        /**
+         * Starts the voice mode from the foreground. Only with Bluetooth audio
+         * connected: without headphones there is no button to talk.
+         */
+        fun start(ctx: Context, source: String): String {
+            if (!VoiceAudio(ctx).bluetoothConnected()) return START_NO_BLUETOOTH
             val i = Intent(ctx, VoiceService::class.java).setAction(ACTION_START).putExtra(EXTRA_SOURCE, source)
             return try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ctx.startForegroundService(i) else ctx.startService(i)
-                true
+                START_OK
             } catch (e: Exception) {
                 Log.w(TAG, "start refused: ${e.javaClass.simpleName}")
-                false
+                START_REFUSED
             }
         }
 

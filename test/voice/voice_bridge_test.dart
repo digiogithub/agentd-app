@@ -120,6 +120,7 @@ void main() {
         hub,
         channel: ch,
         headsetMic: () async => false,
+        unplugGrace: const Duration(milliseconds: 40),
         controller: (port, hub) {
           final c = VoiceController(port: port, hub: hub);
           made.add(c);
@@ -204,6 +205,23 @@ void main() {
       await settle();
       expect(made, hasLength(2));
       expect(bridge.controller!.state, isNot(VoiceState.off));
+    });
+
+    test('headphones gone for the grace time: off without a word, service told to exit', () async {
+      await bridge.handle(const MethodCall('started', {'source': 'launcher'}));
+      await settle();
+      await bridge.controller!.whenIdle();
+      sent.clear();
+      // A short drop (profile switch while the mic opens) is ignored.
+      await bridge.handle(const MethodCall('route', {'bt': false}));
+      await bridge.handle(const MethodCall('route', {'bt': true}));
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      expect(bridge.controller, isNotNull);
+      await bridge.handle(const MethodCall('route', {'bt': false}));
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      expect(bridge.controller, isNull);
+      expect(sent.map((c) => c.method), contains('exit'));
+      expect(sent.where((c) => c.method == 'say'), isEmpty);
     });
 
     test('stateText', () {

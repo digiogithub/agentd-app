@@ -127,9 +127,13 @@ typedef VoiceControllerFactory = VoiceController Function(VoicePort port, CarHub
 ///   that turned itself off (it said "Salgo") is replaced.
 /// - `button`: forwarded to the port's [VoicePort.buttons].
 /// - `stopped`: the controller is disposed, without speaking.
+/// - `route {bt: false}` that lasts [unplugGrace]: the headphones are gone,
+///   so voice mode ends without a word (it would come out of the speaker
+///   and there is no button left to stop it). Android refuses to start it
+///   without Bluetooth audio.
 /// - controller states go to the notification text (`state`).
 class VoiceBridge {
-  VoiceBridge(this.hub, {MethodChannel? channel, this.headsetMic, VoiceControllerFactory? controller})
+  VoiceBridge(this.hub, {MethodChannel? channel, this.headsetMic, VoiceControllerFactory? controller, this.unplugGrace = const Duration(seconds: 3)})
       : _ch = channel ?? const MethodChannel(voiceChannelName),
         _factory = controller ?? ((port, hub) => VoiceController(port: port, hub: hub)) {
     port = MethodChannelVoicePort(_ch);
@@ -137,6 +141,11 @@ class VoiceBridge {
 
   final CarHub hub;
   final MethodChannel _ch;
+
+  /// How long Bluetooth audio may be missing (a profile switch while the
+  /// headset mic opens) before voice mode ends.
+  final Duration unplugGrace;
+  Timer? _unplug;
 
   /// Reads the "Micrófono de los auriculares" setting (default true).
   final Future<bool> Function()? headsetMic;
@@ -163,8 +172,15 @@ class VoiceBridge {
         final b = VoiceButton.values.where((v) => v.name == a['key']).firstOrNull;
         if (b != null) port.addButton(b);
       case 'route':
-        // Bluetooth route changes: the native side already routes the mic.
-        break;
+        if (a['bt'] == true) {
+          _unplug?.cancel();
+          _unplug = null;
+        } else {
+          _unplug ??= Timer(unplugGrace, () {
+            _unplug = null;
+            unawaited(_unplugged());
+          });
+        }
       default:
         throw MissingPluginException(call.method);
     }
@@ -189,7 +205,16 @@ class VoiceBridge {
     await c.start();
   }
 
+  /// The headphones are gone: off without speaking, and the service stops.
+  Future<void> _unplugged() async {
+    if (_controller == null) return;
+    await _stop();
+    await port.exit();
+  }
+
   Future<void> _stop() async {
+    _unplug?.cancel();
+    _unplug = null;
     final c = _controller;
     _controller = null;
     await _stateSub?.cancel();

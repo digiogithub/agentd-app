@@ -167,7 +167,10 @@ class CarHub {
         open[tag] = CarNotice(tag: tag, sessionKey: a.key, session: a.name, host: host, title: '${a.name} te pregunta', text: '${truncateWords(q.body.trim(), 600)}$opts');
       }
       if (menu != null) {
-        final tag = 'm/${a.key}/${menu.revision ?? menu.question.hashCode}';
+        // The menu's content names it, not the view revision: the revision
+        // moves with every redraw of the agent's screen, which re-announced
+        // (and re-notified) the same menu over and over.
+        final tag = 'm/${a.key}/${Object.hash(menu.kind, menu.question, menu.detail, Object.hashAll([for (final o in menu.options) o.label])) & 0x7fffffff}';
         final what = menu.kind == PendingKind.permission ? 'pide permiso' : 'espera tu decisión';
         final detail = (menu.detail ?? '').trim().isEmpty ? '' : '\n${menu.detail!.trim()}';
         final opts = menu.options.isEmpty ? '' : '\nOpciones: ${spokenOptions([for (final o in menu.options) o.label])}';

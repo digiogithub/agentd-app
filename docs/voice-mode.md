@@ -21,6 +21,13 @@ agents, all through the headphones with Google's own speech engines.
   ask "¿Seguro?".
 - New questions and menus are announced while idle ("api pregunta. Pulsa para oír."), with the music
   ducked, not stopped.
+- Bluetooth only (1.13.1): it does not start without Bluetooth audio connected ("Conecta unos
+  auriculares Bluetooth…"), and it ends without a word when the headphones are gone for 3 s (there
+  is no button left and the speech would come out of the speaker). It cannot start by itself when the
+  headphones connect: Android does not let a background app open the microphone.
+- An item is announced twice at most. Terminal menus are identified by their content (question,
+  detail, options), not by the view revision, which moves with every redraw and made the same menu
+  announce (and notify) again and again (fixed in 1.13.1).
 - It leaves by itself after 20 minutes without use ("Salgo del modo voz"): it keeps the hosts
   connected while on.
 
