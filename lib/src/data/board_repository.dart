@@ -13,7 +13,7 @@ class LiveBoardRepository implements BoardRepository {
   LiveBoardRepository({
     required this._hosts,
     required this._clients,
-    this.refreshDebounce = const Duration(milliseconds: 250),
+    this.refreshDebounce = const Duration(seconds: 1),
     this.retry = const Duration(seconds: 20),
   });
 
@@ -199,6 +199,12 @@ class _BoardHost {
     });
   }
 
+  /// [_schedule] unless a refresh is already due: busy agents send status
+  /// events all the time, and a restarted timer would never fire.
+  void _scheduleOnce(Duration after) {
+    if (_timer == null) _schedule(after);
+  }
+
   /// Fetches the board now (one request at a time; a call during a request
   /// runs another one after it).
   void refresh() {
@@ -298,7 +304,7 @@ class _BoardHost {
       case SubscribedEvent(:final reconnect):
         // The first connection follows a fresh board; a reconnection may
         // have missed events.
-        if (reconnect) _schedule(repo.refreshDebounce);
+        if (reconnect) _scheduleOnce(repo.refreshDebounce);
       case ResyncEvent() ||
           SessionInfoEvent() ||
           SessionExitedEvent() ||
@@ -309,7 +315,7 @@ class _BoardHost {
           TaskChangedEvent() ||
           NoteChangedEvent() ||
           SessionLabelsEvent():
-        _schedule(repo.refreshDebounce);
+        _scheduleOnce(repo.refreshDebounce);
       default:
         break; // heartbeat, hello, bye, disconnected...
     }

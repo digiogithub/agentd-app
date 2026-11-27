@@ -64,6 +64,7 @@ class LiveSessionsRepository implements SessionsRepository {
     MuxFactory? mux,
     this.muxPoll = const Duration(seconds: 5),
     this.refreshDebounce = const Duration(milliseconds: 150),
+    this.viewInterval = const Duration(milliseconds: 600),
     this.viewLines = 300,
     this.promptRetry = const Duration(seconds: 2),
     this.promptWait = const Duration(seconds: 90),
@@ -74,6 +75,11 @@ class LiveSessionsRepository implements SessionsRepository {
        _muxFactory = mux ?? defaultMuxAdapters;
 
   final DateTime Function() _now;
+
+  /// Shortest time between two view requests of one open session: a busy
+  /// agent changes its view many times a second, and every request is a
+  /// round trip over SSH or the relay (battery).
+  final Duration viewInterval;
 
   final HostsRepository _hosts;
   final AgentdClients _clients;
@@ -836,10 +842,17 @@ class _Feed {
 
   _AgentdHost? get _host => repo._agentd[base.hostId];
 
+  /// When the last view request started.
+  DateTime? _fetchedAt;
+
   void refresh({bool debounce = false, bool ack = false}) {
     if (debounce) {
-      _debounce?.cancel();
-      _debounce = Timer(repo.refreshDebounce, () => refresh());
+      // Not restarted by later events: a steady stream of changes still
+      // gets a refresh every [refreshDebounce] (+ [viewInterval]).
+      _debounce ??= Timer(repo.refreshDebounce, () {
+        _debounce = null;
+        refresh();
+      });
       return;
     }
     if (_running) {
@@ -860,6 +873,13 @@ class _Feed {
           ack = false;
           host.client.viewAck(base.name).ignore();
         }
+        final at = _fetchedAt;
+        if (at != null) {
+          final wait = repo.viewInterval - DateTime.now().difference(at);
+          if (wait > Duration.zero) await Future<void>.delayed(wait);
+          if (listeners.isEmpty) break;
+        }
+        _fetchedAt = DateTime.now();
         final v = await host.client.view(base.name, sinceRevision: _revision, epoch: _epoch, linesLimit: repo.viewLines, markup: true);
         apply(v);
       } while (_again && listeners.isNotEmpty);

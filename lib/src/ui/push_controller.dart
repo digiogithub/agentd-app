@@ -34,6 +34,14 @@ class PushController {
   final _registered = <String>{};
   final _inFlight = <String>{};
 
+  /// Hosts whose daemon pushes to this device: registered with the current
+  /// token at some point, kept while the host is offline (it still pushes).
+  final _pushing = <String>{};
+
+  /// Hosts that reach this device by push while the app holds no connection
+  /// to them (the background controller closes those connections).
+  Set<String> get pushHosts => _ready && enabled() && _token != null ? Set.unmodifiable(_pushing) : const {};
+
   /// Tapped notifications (cold start first).
   Stream<PushOpen> get opens => _opens.stream;
 
@@ -70,7 +78,10 @@ class PushController {
     for (final id in online) {
       if (_registered.contains(id) || !_inFlight.add(id)) continue;
       try {
-        if (await push.register(id, token: token, deviceName: deviceName) && _token == token && enabled()) _registered.add(id);
+        if (await push.register(id, token: token, deviceName: deviceName) && _token == token && enabled()) {
+          _registered.add(id);
+          _pushing.add(id);
+        }
       } finally {
         _inFlight.remove(id);
       }
@@ -82,6 +93,7 @@ class PushController {
     _token = t;
     final was = Set.of(_registered);
     _registered.clear();
+    _pushing.clear();
     if (old != null && old != t) {
       for (final id in was) {
         await push.unregister(id, token: old);
@@ -97,6 +109,7 @@ class PushController {
     if (enabled()) return _sync();
     final was = Set.of(_registered);
     _registered.clear();
+    _pushing.clear();
     if (token == null) return;
     for (final id in was) {
       await push.unregister(id, token: token);
@@ -107,6 +120,7 @@ class PushController {
   Future<void> forget(String hostId) async {
     final token = _token;
     final was = _registered.remove(hostId);
+    _pushing.remove(hostId);
     if (token != null && was) await push.unregister(hostId, token: token);
   }
 

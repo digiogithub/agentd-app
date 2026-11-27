@@ -142,4 +142,38 @@ void main() {
     await _tick();
     expect(bridge.notes, hasLength(3));
   });
+
+  test('hosts that push are disconnected after a while in the background', () async {
+    await c.dispose();
+    hosts = FakeHostsRepository(hosts: [_host('estudio', HostState.online), _host('vps', HostState.online), _host('casa', HostState.connecting)]);
+    var push = {'estudio', 'casa'};
+    c = BackgroundController(
+      hosts: hosts,
+      sessions: sessions,
+      bridge: bridge,
+      settings: () => settings,
+      pushHosts: () => push,
+      suspendAfter: const Duration(milliseconds: 30),
+      now: () => now,
+    )..start();
+    await _tick();
+
+    // A quick trip to another app keeps the connections.
+    c.setForeground(false);
+    c.setForeground(true);
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+    expect(hosts.disconnected, isEmpty);
+
+    c.setForeground(false);
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+    expect(hosts.disconnected, unorderedEquals(['estudio', 'casa']), reason: 'vps has no push: it keeps its connection');
+
+    // Without push nothing is closed.
+    push = {};
+    c.setForeground(true);
+    hosts.disconnected.clear();
+    c.setForeground(false);
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+    expect(hosts.disconnected, isEmpty);
+  });
 }

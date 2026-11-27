@@ -61,9 +61,9 @@ final sessionsProvider = StreamProvider<List<AgentSession>>((ref) => ref.watch(s
 /// Project names (agentd aliases) of a host, for the new-session chips.
 final projectsProvider = FutureProvider.autoDispose.family<List<String>, String>((ref, hostId) => ref.watch(sessionsRepositoryProvider).projects(hostId));
 
-final inboxProvider = StreamProvider.family<List<MailMessage>, String>((ref, hostId) => ref.watch(mailRepositoryProvider).inbox(hostId));
+final inboxProvider = StreamProvider.autoDispose.family<List<MailMessage>, String>((ref, hostId) => ref.watch(mailRepositoryProvider).inbox(hostId));
 
-final queuesProvider = StreamProvider.family<List<WorkQueue>, String>((ref, hostId) => ref.watch(mailRepositoryProvider).queues(hostId));
+final queuesProvider = StreamProvider.autoDispose.family<List<WorkQueue>, String>((ref, hostId) => ref.watch(mailRepositoryProvider).queues(hostId));
 
 /// The work dashboard of one host (tasks and open questions of its agents).
 final boardProvider = StreamProvider.family<HostBoard, String>((ref, hostId) => ref.watch(boardRepositoryProvider).watch(hostId));

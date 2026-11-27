@@ -88,6 +88,21 @@ void main() {
     await eventually(() => repo.calls.where((x) => x == 'register a').length == 2);
   });
 
+  test('pushHosts: registered hosts, kept offline, cleared when push is off or the host forgotten', () async {
+    repo.refusing.add('b');
+    await start();
+    await eventually(() => repo.registered.containsKey('a'));
+    expect(c.pushHosts, {'a'});
+    hosts.set([_offline('a'), onlineHost('b', testCaps())]);
+    await pumpEventQueue();
+    expect(c.pushHosts, {'a'}, reason: 'its daemon still pushes while the app is disconnected');
+    enabled = false;
+    expect(c.pushHosts, isEmpty);
+    enabled = true;
+    await c.forget('a');
+    expect(c.pushHosts, isEmpty);
+  });
+
   test('a refusing host (older daemon) is tried again on the next update', () async {
     repo.refusing.add('a');
     await start();

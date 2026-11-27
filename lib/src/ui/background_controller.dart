@@ -2,6 +2,12 @@
 // foreground, keep a "connected" notification (Android foreground service)
 // while a host is online, disconnect from it, and notify agent events while
 // the app is not in the foreground.
+//
+// Battery: a host whose daemon pushes to this device (questions,
+// permissions) needs no connection in the background. [suspendAfter] in the
+// background its connection is closed (no relay pings, event streams, views
+// or polls) and the service stops when no host is left; back in the
+// foreground every host is connected again.
 
 import 'dart:async';
 
@@ -10,8 +16,16 @@ import '../platform/background.dart';
 import 'providers.dart';
 
 class BackgroundController {
-  BackgroundController({required this.hosts, required this.sessions, required this.bridge, required this.settings, DateTime Function()? now})
-    : _now = now ?? DateTime.now;
+  BackgroundController({
+    required this.hosts,
+    required this.sessions,
+    required this.bridge,
+    required this.settings,
+    Set<String> Function()? pushHosts,
+    this.suspendAfter = const Duration(minutes: 1),
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now,
+       _pushHosts = pushHosts ?? (() => const {});
 
   final HostsRepository hosts;
   final SessionsRepository sessions;
@@ -19,6 +33,14 @@ class BackgroundController {
 
   /// Current settings (read on every decision).
   final AppSettings Function() settings;
+
+  /// Hosts that push to this device (PushController.pushHosts).
+  final Set<String> Function() _pushHosts;
+
+  /// Time in the background before the connections of [_pushHosts] close
+  /// (a quick switch to another app keeps them).
+  final Duration suspendAfter;
+  Timer? _suspend;
 
   final _subs = <StreamSubscription<Object?>>[];
   final _last = <String, AgentStatus>{};
@@ -53,7 +75,21 @@ class BackgroundController {
   void setForeground(bool fg) {
     final was = _foreground;
     _foreground = fg;
+    _suspend?.cancel();
+    _suspend = null;
     if (fg && !was) unawaited(hosts.reconnectAll());
+    if (!fg && was) _suspend = Timer(suspendAfter, _suspendPushHosts);
+  }
+
+  /// Closes the connection (or the reconnect attempts) of every host that
+  /// pushes to this device.
+  void _suspendPushHosts() {
+    _suspend = null;
+    if (_foreground) return;
+    final push = _pushHosts();
+    for (final h in _hosts) {
+      if (h.state != HostState.offline && push.contains(h.config.id)) unawaited(hosts.disconnect(h.config.id));
+    }
   }
 
   bool get foreground => _foreground;
@@ -111,6 +147,7 @@ class BackgroundController {
   static int notificationId(String key) => 100 + (key.hashCode & 0x3fffffff);
 
   Future<void> dispose() async {
+    _suspend?.cancel();
     for (final s in _subs) {
       await s.cancel();
     }

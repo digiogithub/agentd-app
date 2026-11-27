@@ -9,7 +9,7 @@ import '../core/contracts.dart';
 import 'agentd_clients.dart';
 
 class AgentdMailRepository implements MailRepository {
-  AgentdMailRepository({required this._clients, this.poll = const Duration(seconds: 5)});
+  AgentdMailRepository({required this._clients, this.poll = const Duration(seconds: 15)});
 
   final AgentdClients _clients;
   final Duration poll;

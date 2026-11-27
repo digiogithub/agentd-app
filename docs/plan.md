@@ -343,6 +343,28 @@ gitignored `google-services.json` is supplied: `docs/push.md`.
 - Tests: `test/data/push_repository_test.dart` (fake daemon), `test/ui/push_controller_test.dart`,
   `test/ui/push_ui_test.dart` (app on the fakes). No Firebase in tests (`NoopPushMessaging` default).
 
+## Battery (background and foreground)
+
+Changed on 2026-11-27, version 1.11.7 (José: the app drained the battery in the background over the
+relay; in the background it should only get the questions).
+
+- Background: a host whose daemon pushes to this device (`PushController.pushHosts`: registered with
+  the current token, kept while offline, cleared when push is turned off, the token changes or the
+  host is forgotten) is disconnected by `BackgroundController` after `suspendAfter` (1 min) in the
+  background: no relay pings, event subscriptions, views, board or mail polls. The connection
+  service stops when no host is left online. Questions and permission dialogs still arrive by push;
+  the local "turn done / exited" notifications of those hosts do not (they came from the live
+  connection). Back in the foreground `reconnectAll` connects every host again. Hosts without push
+  (push off, older daemon, no Firebase config) keep the old behaviour. The car engine has its own
+  connections and is not affected.
+- Foreground: an open session's view is fetched at most every `viewInterval` (600 ms) and the event
+  debounce is no longer restarted by later events (a busy agent used to cause back-to-back view
+  requests); the board refresh waits 1 s and is not restarted either; the mailbox polls every 15 s
+  (was 5 s) and only while a screen shows it (`inboxProvider` / `queuesProvider` are autoDispose: an
+  opened chat used to keep a 5 s poll per host for the life of the app).
+- Tests: `test/ui/background_controller_test.dart` (suspend), `test/ui/push_controller_test.dart`
+  (`pushHosts`).
+
 ## Android Auto
 
 Added on 2026-11-25, version 1.10.0. Full notes: `docs/android-auto.md`.

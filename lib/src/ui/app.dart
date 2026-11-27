@@ -56,6 +56,7 @@ class _AgentdAppState extends ConsumerState<AgentdApp>
       sessions: ref.read(sessionsRepositoryProvider),
       bridge: ref.read(backgroundBridgeProvider),
       settings: () => ref.read(settingsProvider),
+      pushHosts: () => _push.pushHosts,
     )..start();
     _opens = _background.opens.listen(_openSession);
     _push = PushController(

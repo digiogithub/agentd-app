@@ -117,6 +117,10 @@ The app registers itself on every agentd host it connects to; Ajustes > **Notifi
 turns it off. Builds without a Firebase config (`android/app/google-services.json`, not in git) run
 without push: see `docs/push.md`.
 
+Battery: with push working, a host is disconnected after one minute in the background (questions
+and permission dialogs keep arriving by push) and connected again when the app comes back. In the
+foreground the app limits how often it asks a busy agent for its screen and the mailbox.
+
 ## Android Auto
 
 The Panel on the car screen: agents waiting for a decision (listen and answer by voice), blocked
