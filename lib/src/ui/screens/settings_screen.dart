@@ -371,7 +371,9 @@ class SettingsScreen extends ConsumerWidget {
     final r = await ref.read(backgroundBridgeProvider).startVoice();
     if (r == VoiceStart.ok || !context.mounted) return;
     final text = r == VoiceStart.noBluetooth ? 'Conecta unos auriculares Bluetooth para usar el modo voz' : 'No se pudo activar el modo voz';
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.maybeOf(context)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text)));
   }
 
   /// A list of color schemes with a sample of each; picking one applies it.

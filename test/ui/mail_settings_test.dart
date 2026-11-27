@@ -106,9 +106,9 @@ void main() {
 
       // Without headphones it says what is missing.
       bg.answer = VoiceStart.noBluetooth;
-      await tester.pump(const Duration(seconds: 5));
       await tester.tap(start);
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
       expect(find.text('Conecta unos auriculares Bluetooth para usar el modo voz'), findsOneWidget);
     });
 
