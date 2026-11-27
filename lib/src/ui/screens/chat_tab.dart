@@ -164,9 +164,10 @@ class _ChatTabState extends ConsumerState<ChatTab> {
   }
 
   Future<void> _pickSource() async {
-    final host = ref.read(hostConfigProvider(widget.session.hostId));
-    if (!(host?.hasShell ?? true)) {
-      showToast(context, 'Adjuntar imágenes en hosts por relay necesita una versión de agentd que aún no está disponible');
+    final can = await ref.read(sessionsRepositoryProvider).canUploadImages(widget.session).catchError((Object _) => false);
+    if (!mounted) return;
+    if (!can) {
+      showToast(context, 'Para adjuntar imágenes por relay el host necesita agentd 0.12 o posterior');
       return;
     }
     if (_attachments.remaining <= 0) {

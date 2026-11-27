@@ -290,6 +290,13 @@ class FakeSessionsRepository implements SessionsRepository {
   /// When set, [uploadImage] fails with this error (to test error handling).
   Object? uploadError;
 
+  /// Hosts whose uploads are refused by [canUploadImages] (relay host with
+  /// an older daemon).
+  final Set<String> noUploads = {};
+
+  @override
+  Future<bool> canUploadImages(AgentSession s) async => !noUploads.contains(s.hostId);
+
   @override
   Future<String> uploadImage(
     AgentSession s,

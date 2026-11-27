@@ -100,8 +100,11 @@ the dictation button inside, stop, send); with the focus they move to a bar belo
 (attach, dictation | stop, send) and the input takes the whole width (up to 8 lines). The field and
 the dictation button keep GlobalKeys, so text and a running dictation survive the move. Stop
 (`stop-button`, Esc through `act interrupt`) shows while the agent is working. The attach button is
-always shown; on relay hosts (no shell) it says that the upload needs a newer agentd (op asked to
-the agentd agent, msg #1639, 2026-11-27).
+always shown. Uploads go through the daemon when its `info.features` has `upload` (agentd 0.12+,
+contract from the agentd agent, msg #1640, 2026-11-27: op `upload {name, ext, data base64}` ->
+`{path, size}`, 1..6 MiB, png/jpg/jpeg/webp/gif, file in the daemon's state dir, relay scope operate+),
+on SSH and relay hosts alike; otherwise over the SSH shell as before. A relay host whose daemon lacks
+the feature says that it needs agentd 0.12 (`SessionsRepository.canUploadImages`, info cached 30 s).
 
 The composer's "+" attaches up to 6 images (`widgets/attachments/`): gallery (multiple) or camera through `image_picker` (scaled to 2048 px, quality 85) behind `AttachmentSource` (`attachmentSourceProvider`, faked in tests). Tapping a thumbnail opens `screens/image_editor_screen.dart` on the ORIGINAL image: pen, arrow, rectangle, text, 5 colors, thin/thick stroke, undo/redo/clear. Marks live in image space (`ui/annotate/annotation_model.dart`, pure Dart; painter in `annotation_painter.dart`), so "Listo" flattens them to a full-resolution PNG (`renderAnnotatedPng`); the model is kept per attachment to reopen the editor. On send each image is uploaded with `SessionsRepository.uploadImage` (`RemoteShell.writeFile`: SFTP, falling back to `base64 -d`/`-D` over exec) to `${XDG_CACHE_HOME:-$HOME/.cache}/agentd-app/uploads/<session>/<yyyyMMdd-HHmmss>-<n>.<ext>` (dir 0700, file 0600), then ONE prompt is sent: the text, a blank line and one absolute path per line (`composePrompt`). On failure attachments and text stay (uploaded paths are reused on retry). Remote files are not deleted by the app yet (the cache dir can be cleaned by hand). Chat tab only: agentd sessions.
 

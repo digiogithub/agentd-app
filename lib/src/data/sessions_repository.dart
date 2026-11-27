@@ -117,7 +117,7 @@ class LiveSessionsRepository implements SessionsRepository {
   final Map<String, ShellSession> _shells = {};
   final Map<String, _Feed> _feeds = {};
   final Map<String, String> _homes = {};
-  final Map<String, (DateTime, Map<String, String>)> _aliases = {};
+  final Map<String, (DateTime, AgentdInfo)> _infos = {};
   final _changes = StreamController<void>.broadcast();
   StreamSubscription<List<HostStatus>>? _hostsSub;
   int _watchers = 0;
@@ -372,6 +372,14 @@ class LiveSessionsRepository implements SessionsRepository {
       throw ArgumentError.value(extension, 'extension');
     }
     final ext = extension.toLowerCase();
+    if (s.source == SessionSource.agentd && await _daemonUploads(s.hostId)) {
+      if (bytes.length > AgentdClient.maxUploadBytes) throw StateError('la imagen pasa de 6 MiB');
+      final c = await _clientOf(s);
+      return (await c.upload(s.name, ext: ext, data: bytes)).path;
+    }
+    if (!(_hostStatus[s.hostId]?.config.hasShell ?? true)) {
+      throw StateError('el agentd del host no permite subir imágenes por relay (necesita agentd 0.12)');
+    }
     final shell = await _hosts.shell(s.hostId);
     var base = _uploadBases[s.hostId];
     if (base == null) {
@@ -455,20 +463,32 @@ class LiveSessionsRepository implements SessionsRepository {
   @override
   Future<List<String>> projects(String hostId) async => (await _aliasDirs(hostId)).keys.toList();
 
-  /// agentd aliases of a host (name → dir), cached 30 s. Empty without agentd.
-  Future<Map<String, String>> _aliasDirs(String hostId) async {
-    final cached = _aliases[hostId];
+  @override
+  Future<bool> canUploadImages(AgentSession s) async =>
+      (s.source == SessionSource.agentd && await _daemonUploads(s.hostId)) || (_hostStatus[s.hostId]?.config.hasShell ?? true);
+
+  Future<bool> _daemonUploads(String hostId) async => (await _info(hostId))?.has('upload') ?? false;
+
+  /// The daemon's `info`, cached 30 s (null without agentd or on failure
+  /// with nothing cached).
+  Future<AgentdInfo?> _info(String hostId) async {
+    final cached = _infos[hostId];
     if (cached != null && DateTime.now().difference(cached.$1) < const Duration(seconds: 30)) return cached.$2;
     final c = await _clients.forHost(hostId);
-    if (c == null) return const {};
+    if (c == null) return null;
     try {
       final info = await c.info();
-      final m = {for (final a in info.aliases) a.name: a.dir};
-      _aliases[hostId] = (DateTime.now(), m);
-      return m;
+      _infos[hostId] = (DateTime.now(), info);
+      return info;
     } catch (_) {
-      return cached?.$2 ?? const {};
+      return cached?.$2;
     }
+  }
+
+  /// agentd aliases of a host (name → dir). Empty without agentd.
+  Future<Map<String, String>> _aliasDirs(String hostId) async {
+    final info = await _info(hostId);
+    return {for (final a in info?.aliases ?? const <AgentdAlias>[]) a.name: a.dir};
   }
 
   Future<String> _home(String hostId) async {

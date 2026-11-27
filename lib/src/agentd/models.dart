@@ -76,6 +76,7 @@ class AgentdInfo {
     this.profiles = const [],
     this.aliases = const [],
     this.agentView = false,
+    this.features = const [],
   });
   factory AgentdInfo.fromJson(Json j) => AgentdInfo(
     host: _str(j['host']),
@@ -86,6 +87,7 @@ class AgentdInfo {
     profiles: [for (final p in _list(j['profiles'])) AgentdProfile.fromJson(_map(p))],
     aliases: [for (final a in _list(j['aliases'])) AgentdAlias.fromJson(_map(a))],
     agentView: _bool(j['agent_view']),
+    features: [for (final f in _list(j['features'])) _str(f)],
   );
   final String host;
   final String version;
@@ -95,6 +97,19 @@ class AgentdInfo {
   final List<AgentdProfile> profiles;
   final List<AgentdAlias> aliases;
   final bool agentView;
+
+  /// Optional ops the daemon offers (`upload`, agentd 0.12+); absent on
+  /// older daemons.
+  final List<String> features;
+  bool has(String feature) => features.contains(feature);
+}
+
+/// Answer of `upload`: where the daemon wrote the file.
+class AgentdUpload {
+  const AgentdUpload({required this.path, required this.size});
+  factory AgentdUpload.fromJson(Json j) => AgentdUpload(path: _str(j['path']), size: _int(j['size']));
+  final String path;
+  final int size;
 }
 
 /// One OSC 7501 program status record.

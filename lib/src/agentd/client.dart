@@ -2,6 +2,8 @@
 // like the Go client; subscribe and attach upgrade their own connection).
 
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import '../core/contracts.dart';
 import 'attach.dart';
@@ -104,6 +106,15 @@ class AgentdClient {
   Future<AgentdPing> ping() async => AgentdPing.fromJson(await _callMap('ping'));
 
   Future<AgentdInfo> info() async => AgentdInfo.fromJson(await _callMap('info'));
+
+  /// Largest file op upload takes (decoded bytes, agentd proto.MaxUploadBytes).
+  static const maxUploadBytes = 6 << 20;
+
+  /// Writes an image for session [name] in the daemon's uploads dir and
+  /// answers its path (op upload, agentd 0.12+, `info.features` "upload").
+  /// [ext]: png, jpg, jpeg, webp or gif.
+  Future<AgentdUpload> upload(String name, {required String ext, required Uint8List data}) async =>
+      AgentdUpload.fromJson(await _callMap('upload', {'name': name, 'ext': ext, 'data': base64Encode(data)}, actTimeout));
 
   // ---- Sessions ----
 

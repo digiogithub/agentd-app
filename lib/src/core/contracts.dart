@@ -630,9 +630,14 @@ abstract class SessionsRepository {
   Future<void> keys(AgentSession s, List<String> keys); // abstract names: enter esc tab up down ctrl-c ...
   Future<void> interrupt(AgentSession s);
 
-  /// Copies an image to the host (private cache dir of the app, mode 0600) and
-  /// returns its absolute remote path, to be written in a prompt. [extension]
-  /// is without the dot (`png`, `jpg`).
+  /// Whether [uploadImage] can reach [s]'s host: through the daemon (op
+  /// upload, agentd 0.12+) or the host's shell (SSH).
+  Future<bool> canUploadImages(AgentSession s);
+
+  /// Copies an image to the host and returns its absolute remote path, to be
+  /// written in a prompt: through the daemon when it offers op upload (its
+  /// uploads dir), else over the shell (private cache dir of the app, mode
+  /// 0600). [extension] is without the dot (`png`, `jpg`).
   Future<String> uploadImage(
     AgentSession s,
     Uint8List bytes, {

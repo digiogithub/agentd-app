@@ -252,15 +252,16 @@ void main() {
     expect(find.text('Observar'), findsNothing);
   });
 
-  testWidgets('operate scope: images say relay is not supported yet, no Terminar', (tester) async {
+  testWidgets('operate scope: images on an old relay daemon say what is needed, no Terminar', (tester) async {
     final fakes = await _relayFakes('estudio', RelayScope.operate);
+    fakes.sessions.noUploads.add('estudio');
     await pumpUi(tester, SessionScreen(session: _session('claude@webapp')), fakes: fakes);
     await settle(tester);
     expect(find.byKey(const ValueKey('composer')), findsOneWidget);
-    // Shown, but a relay host cannot take the file yet: it says so.
+    // Shown, but a daemon without op upload cannot take the file: it says so.
     await tester.tap(find.bySemanticsLabel('Adjuntar imagen'));
     await tester.pump();
-    expect(find.textContaining('hosts por relay'), findsOneWidget);
+    expect(find.textContaining('agentd 0.12'), findsOneWidget);
     await tester.pump(const Duration(seconds: 5));
     await _openMore(tester);
     expect(find.text('Terminar'), findsNothing);

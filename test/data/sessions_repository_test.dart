@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:agentd_app/src/agentd/agentd.dart' show AgentdClient;
 import 'package:agentd_app/src/core/contracts.dart';
 import 'package:agentd_app/src/data/data.dart';
 import 'package:agentd_app/src/mux/mux.dart';
@@ -486,6 +487,21 @@ void main() {
       expect(
         withClock().uploadImage(session, Uint8List(1), extension: '../x'),
         throwsArgumentError,
+      );
+    });
+
+    test('a daemon with op upload takes the file itself (relay too)', () async {
+      d.answer('info', {'host': 'h', 'version': '0.12.0', 'pid': 1, 'epoch': 'ep1', 'features': ['upload']});
+      d.answer('upload', {'path': '/home/u/.local/state/agentd/uploads/claude@web/app/20261116-090507-1.png', 'size': 3});
+      final r = withClock();
+      expect(await r.canUploadImages(session), isTrue);
+      final p = await r.uploadImage(session, Uint8List.fromList([1, 2, 3]), extension: 'PNG');
+      expect(p, '/home/u/.local/state/agentd/uploads/claude@web/app/20261116-090507-1.png');
+      expect(d.lastArgs('upload'), {'name': 'claude@web/app', 'ext': 'png', 'data': 'AQID'});
+      expect(shell.writes, isEmpty, reason: 'nothing over the shell');
+      expect(
+        r.uploadImage(session, Uint8List(AgentdClient.maxUploadBytes + 1), extension: 'png'),
+        throwsStateError,
       );
     });
 
