@@ -12,6 +12,7 @@ import androidx.car.app.connection.CarConnection
 import androidx.lifecycle.Observer
 import dev.digio.agentd_app.car.CarEngine
 import dev.digio.agentd_app.car.CarNotifications
+import dev.digio.agentd_app.voice.VoiceService
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -22,7 +23,10 @@ import io.flutter.plugin.common.MethodChannel
  *    foreground notification (starting it again updates the text);
  *  - notify(id, title, text, session): an event notification (agent
  *    waiting, turn done, session closed); tapping it opens the app;
- *  - requestPermission(): POST_NOTIFICATIONS (Android 13+), → bool.
+ *  - requestPermission(): POST_NOTIFICATIONS (Android 13+), → bool;
+ *  - startVoice() / stopVoice() / voiceRunning(): the hands-free voice mode
+ *    (VoiceService, source `app`; asks for the microphone first if needed),
+ *    startVoice → bool (false if Android refused to start it).
  * Dart is called back with disconnect() (the notification's Desconectar)
  * and open(session) (an event notification was tapped).
  */
@@ -42,6 +46,7 @@ class MainActivity : FlutterActivity() {
         const val EVENTS = "agentd_events_alert"
         private const val LEGACY_EVENTS = "agentd_events"
         const val EXTRA_SESSION = "agentd_session"
+        private const val VOICE_PERMISSION = 7512
 
         /** True while the app is on screen: FCM does not show pushes then. */
         @Volatile
@@ -85,6 +90,12 @@ class MainActivity : FlutterActivity() {
                     result.success(null)
                 }
                 "requestPermission" -> result.success(requestNotifications())
+                "startVoice" -> result.success(startVoice())
+                "stopVoice" -> {
+                    VoiceService.stop(this)
+                    result.success(null)
+                }
+                "voiceRunning" -> result.success(VoiceService.running)
                 else -> result.notImplemented()
             }
         }
@@ -116,6 +127,27 @@ class MainActivity : FlutterActivity() {
         car = null
         if (isFinishing) stopService(Intent(this, ConnectionService::class.java))
         super.onDestroy()
+    }
+
+    private var voicePending = false
+
+    /** Voice mode from the app (foreground): with the microphone permission asked first. */
+    private fun startVoice(): Boolean {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            return VoiceService.start(this, "app")
+        }
+        voicePending = true
+        requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), VOICE_PERMISSION)
+        return true
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == VOICE_PERMISSION && voicePending) {
+            voicePending = false
+            // Without the microphone it still speaks; listen answers {error: permission}.
+            VoiceService.start(this, "app")
+        }
     }
 
     /** The channel of the daemons' pushes; it must exist before one arrives. */

@@ -9,6 +9,7 @@ import androidx.lifecycle.Observer
 import io.flutter.FlutterInjector
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.dart.DartExecutor
+import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
 
 /**
@@ -19,7 +20,8 @@ import io.flutter.plugin.common.MethodChannel
  *
  * Started by the car session, by a push while Android Auto is connected, by
  * a notification reply, or by MainActivity when the car connects. Stopped
- * when nothing uses it: no car session, not in the car, idle for 2 minutes.
+ * when nothing uses it: no car session, not in the car, no hold (the voice
+ * mode holds it while VoiceService runs), idle for 2 minutes.
  * Main thread only.
  */
 object CarEngine {
@@ -36,6 +38,7 @@ object CarEngine {
     private var inCar = false
     private var lastUse = 0L
     private var connection: CarConnection? = null
+    private val holds = linkedSetOf<String>()
     private val carObserver = Observer<Int> { type ->
         inCar = type == CarConnection.CONNECTION_TYPE_PROJECTION || type == CarConnection.CONNECTION_TYPE_NATIVE
         if (!inCar) scheduleIdleCheck()
@@ -46,6 +49,30 @@ object CarEngine {
         private set
 
     val running get() = engine != null
+
+    /** The engine's messenger, for other channels (`agentd/voice`); null while stopped. */
+    val messenger: BinaryMessenger? get() = engine?.dartExecutor?.binaryMessenger
+
+    /**
+     * Runs [block] once Dart has said `ready` (now if it already has). Like
+     * [call], dropped if the engine stops first.
+     */
+    fun whenReady(block: () -> Unit) {
+        touch()
+        if (ready) block() else queue.add(block)
+    }
+
+    /** Keeps the engine running (the idle stop ignores it) until [release] with the same [tag]. */
+    fun hold(tag: String) {
+        holds.add(tag)
+        touch()
+    }
+
+    fun release(tag: String) {
+        holds.remove(tag)
+        touch()
+        scheduleIdleCheck()
+    }
 
     fun ensure(ctx: Context) {
         touch()
@@ -131,7 +158,7 @@ object CarEngine {
     private val idleCheck = Runnable {
         if (engine == null) return@Runnable
         val idle = SystemClock.elapsedRealtime() - lastUse >= IDLE_MS
-        if (sessions == 0 && !inCar && idle) stop() else scheduleIdleCheck()
+        if (sessions == 0 && !inCar && holds.isEmpty() && idle) stop() else scheduleIdleCheck()
     }
 
     private fun stop() {

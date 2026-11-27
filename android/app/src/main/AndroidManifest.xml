@@ -14,6 +14,13 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- Short vibration of the agents' notifications (Android 7 builders). -->
     <uses-permission android:name="android.permission.VIBRATE"/>
+    <!-- Hands-free voice mode (voice/VoiceService): a microphone + media
+         playback foreground service, the Bluetooth headset microphone (SCO
+         routing). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
     <application
         android:label="agentd"
         android:name="${applicationName}"
@@ -69,6 +76,32 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Keeps the user's SSH connections to their own hosts open in the background to receive notifications from the coding agents running there." />
         </service>
+        <!-- Hands-free voice mode: the service (headset buttons through its
+             platform MediaSession, TTS out, SpeechRecognizer in), started
+             only from the foreground: the app, or the "agentd voz" launcher
+             entry (also "Hey Google, abre agentd voz") through VoiceActivity. -->
+        <service
+            android:name=".voice.VoiceService"
+            android:exported="false"
+            android:foregroundServiceType="microphone|mediaPlayback" />
+        <activity
+            android:name=".voice.VoiceActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity="es.digio.agentd.voice"
+            android:launchMode="singleInstance"
+            android:theme="@style/VoiceTheme" />
+        <activity-alias
+            android:name=".voice.VoiceLauncher"
+            android:targetActivity=".voice.VoiceActivity"
+            android:exported="true"
+            android:label="agentd voz"
+            android:icon="@mipmap/ic_launcher">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
         <!-- Android Auto (docs/android-auto.md): the Panel on the car screen
              (Car App Library, messaging category), messaging notifications
              with a dictated reply, and FCM pushes waking the car engine. -->
