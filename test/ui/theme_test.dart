@@ -31,6 +31,31 @@ void main() {
     expect(AppPalette.dark.terminalBg, AppPalette.light.terminalBg);
   });
 
+  test('schemes: each brightness has its own, and they read well (WCAG contrast)', () {
+    expect(AppPalette.resolve(ThemeChoice.dark, Brightness.light, darkScheme: DarkScheme.mocha), same(AppPalette.mocha));
+    expect(AppPalette.resolve(ThemeChoice.system, Brightness.light, darkScheme: DarkScheme.mocha, lightScheme: LightScheme.cream), same(AppPalette.cream));
+    expect(AppPalette.resolve(ThemeChoice.system, Brightness.dark, darkScheme: DarkScheme.amoled), same(AppPalette.amoled));
+    double contrast(Color a, Color b) {
+      final la = a.computeLuminance(), lb = b.computeLuminance();
+      return (la > lb ? la + 0.05 : lb + 0.05) / (la > lb ? lb + 0.05 : la + 0.05);
+    }
+
+    final all = {
+      for (final d in DarkScheme.values) 'dark ${d.name}': (AppPalette.ofDark(d), Brightness.dark),
+      for (final l in LightScheme.values) 'light ${l.name}': (AppPalette.ofLight(l), Brightness.light),
+    };
+    for (final MapEntry(key: name, value: (p, b)) in all.entries) {
+      expect(p.brightness, b, reason: name);
+      for (final bg in [p.bg, p.surface]) {
+        expect(contrast(p.text, bg), greaterThanOrEqualTo(7), reason: '$name text');
+        expect(contrast(p.secondary, bg), greaterThanOrEqualTo(4.5), reason: '$name secondary');
+        expect(contrast(p.muted, bg), greaterThanOrEqualTo(4.5), reason: '$name muted');
+      }
+      expect(contrast(p.accent, p.surface), greaterThanOrEqualTo(3), reason: '$name accent');
+      expect(contrast(p.text, p.raised2), greaterThanOrEqualTo(4.5), reason: '$name raised');
+    }
+  });
+
   test('buildAppTheme follows the palette', () {
     final t = buildAppTheme(AppPalette.light);
     expect(t.brightness, Brightness.light);
@@ -104,6 +129,28 @@ void main() {
     await tester.tap(find.text('Oscuro'));
     await tester.pumpAndSettle();
     expect(AppColors.palette, same(AppPalette.dark));
+  });
+
+  testWidgets('the scheme pickers apply Moka and Crema', (tester) async {
+    await pumpApp(tester);
+    await tester.tap(find.text('Ajustes'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Esquema oscuro'), 300);
+    await tester.tap(find.text('Esquema oscuro'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('scheme-DarkScheme.mocha')));
+    await tester.pumpAndSettle();
+    expect(AppColors.palette, same(AppPalette.mocha));
+    expect(find.text('Moka (Catppuccin)'), findsOneWidget);
+    // The light scheme is kept for Claro and does not change the dark theme.
+    await tester.tap(find.text('Esquema claro'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('scheme-LightScheme.cream')));
+    await tester.pumpAndSettle();
+    expect(AppColors.palette, same(AppPalette.mocha));
+    await tester.tap(find.text('Claro'));
+    await tester.pumpAndSettle();
+    expect(AppColors.palette, same(AppPalette.cream));
   });
 
   testWidgets('Sistema follows the platform brightness', (tester) async {

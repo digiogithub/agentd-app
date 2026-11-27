@@ -120,6 +120,8 @@ without push: see `docs/push.md`.
 Battery: with push working, a host is disconnected after one minute in the background (questions
 and permission dialogs keep arriving by push) and connected again when the app comes back. In the
 foreground the app limits how often it asks a busy agent for its screen and the mailbox.
+Ajustes > Apariencia: dark, light or system mode, each with its color scheme (dark: default, Moka,
+AMOLED black, Solarized, Nord, Gruvbox, Dracula; light: default, Cream, Latte, Solarized).
 Ajustes > **Ahorro de batería** (Bajo, Medio, Alto) stretches those intervals and disconnects sooner;
 the installed version is shown below it.
 

@@ -103,6 +103,29 @@ final hostNamesProvider = Provider<Map<String, String>>((ref) {
 
 enum ThemeChoice { dark, light, system }
 
+/// Color scheme used when the theme is dark. Stored by name: append only.
+enum DarkScheme { standard, mocha, amoled, solarized, nord, gruvbox, dracula }
+
+/// Color scheme used when the theme is light. Stored by name: append only.
+enum LightScheme { standard, cream, latte, solarized }
+
+String darkSchemeLabel(DarkScheme s) => switch (s) {
+  DarkScheme.standard => 'Predeterminado',
+  DarkScheme.mocha => 'Moka (Catppuccin)',
+  DarkScheme.amoled => 'AMOLED negro',
+  DarkScheme.solarized => 'Solarizado oscuro',
+  DarkScheme.nord => 'Nord',
+  DarkScheme.gruvbox => 'Gruvbox',
+  DarkScheme.dracula => 'Dracula',
+};
+
+String lightSchemeLabel(LightScheme s) => switch (s) {
+  LightScheme.standard => 'Predeterminado',
+  LightScheme.cream => 'Crema',
+  LightScheme.latte => 'Latte (Catppuccin)',
+  LightScheme.solarized => 'Solarizado claro',
+};
+
 /// How the Agents screen groups sessions.
 enum AgentsGrouping { project, status }
 
@@ -128,6 +151,8 @@ class AppSettings {
     this.keepConnected = true,
     this.pushEnabled = true,
     this.batterySaver = BatterySaver.low,
+    this.darkScheme = DarkScheme.standard,
+    this.lightScheme = LightScheme.standard,
   });
 
   final bool notifyWaiting;
@@ -162,6 +187,10 @@ class AppSettings {
   /// connections of hosts that push once in the background (PowerTuning).
   final BatterySaver batterySaver;
 
+  /// Schemes of the dark and light themes ("Sistema" switches between them).
+  final DarkScheme darkScheme;
+  final LightScheme lightScheme;
+
   AppSettings copyWith({
     bool? notifyWaiting,
     bool? notifyTurnDone,
@@ -177,6 +206,8 @@ class AppSettings {
     bool? keepConnected,
     bool? pushEnabled,
     BatterySaver? batterySaver,
+    DarkScheme? darkScheme,
+    LightScheme? lightScheme,
   }) => AppSettings(
     notifyWaiting: notifyWaiting ?? this.notifyWaiting,
     notifyTurnDone: notifyTurnDone ?? this.notifyTurnDone,
@@ -192,6 +223,8 @@ class AppSettings {
     keepConnected: keepConnected ?? this.keepConnected,
     pushEnabled: pushEnabled ?? this.pushEnabled,
     batterySaver: batterySaver ?? this.batterySaver,
+    darkScheme: darkScheme ?? this.darkScheme,
+    lightScheme: lightScheme ?? this.lightScheme,
   );
 }
 
@@ -249,6 +282,8 @@ extension AppSettingsJson on AppSettings {
     'keepConnected': keepConnected,
     'pushEnabled': pushEnabled,
     'batterySaver': batterySaver.name,
+    'darkScheme': darkScheme.name,
+    'lightScheme': lightScheme.name,
   };
 }
 
@@ -283,6 +318,8 @@ AppSettings appSettingsFromJson(Object? json, {AppSettings fallback = const AppS
     keepConnected: b('keepConnected', fallback.keepConnected),
     pushEnabled: b('pushEnabled', fallback.pushEnabled),
     batterySaver: BatterySaver.values.where((l) => l.name == json['batterySaver']).firstOrNull ?? fallback.batterySaver,
+    darkScheme: DarkScheme.values.where((x) => x.name == json['darkScheme']).firstOrNull ?? fallback.darkScheme,
+    lightScheme: LightScheme.values.where((x) => x.name == json['lightScheme']).firstOrNull ?? fallback.lightScheme,
   );
 }
 

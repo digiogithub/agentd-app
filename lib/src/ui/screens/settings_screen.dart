@@ -270,6 +270,29 @@ class SettingsScreen extends ConsumerWidget {
                   value: s.theme,
                   onChanged: (t) => n.update((x) => x.copyWith(theme: t)),
                 ),
+                const SizedBox(height: 10),
+                group([
+                  link('Esquema oscuro', darkSchemeLabel(s.darkScheme), () => _pickScheme<DarkScheme>(
+                    context,
+                    title: 'Esquema oscuro',
+                    values: DarkScheme.values,
+                    current: s.darkScheme,
+                    label: darkSchemeLabel,
+                    palette: AppPalette.ofDark,
+                    onPick: (v) => n.update((x) => x.copyWith(darkScheme: v)),
+                  )),
+                  link('Esquema claro', lightSchemeLabel(s.lightScheme), () => _pickScheme<LightScheme>(
+                    context,
+                    title: 'Esquema claro',
+                    values: LightScheme.values,
+                    current: s.lightScheme,
+                    label: lightSchemeLabel,
+                    palette: AppPalette.ofLight,
+                    onPick: (v) => n.update((x) => x.copyWith(lightScheme: v)),
+                  ), divider: false),
+                ]),
+                const SizedBox(height: 8),
+                Text('"Sistema" usa el esquema oscuro o el claro según el modo del teléfono.', style: AppText.caption),
                 const SizedBox(height: 18),
                 const SectionLabel('Ahorro de batería'),
                 const SizedBox(height: 8),
@@ -300,6 +323,41 @@ class SettingsScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  /// A list of color schemes with a sample of each; picking one applies it.
+  Future<void> _pickScheme<T>(
+    BuildContext context, {
+    required String title,
+    required List<T> values,
+    required T current,
+    required String Function(T) label,
+    required AppPalette Function(T) palette,
+    required void Function(T) onPick,
+  }) async {
+    final picked = await showModalBottomSheet<T>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 8), child: Text(title, style: AppText.cardTitle)),
+            for (final v in values)
+              ListTile(
+                key: ValueKey('scheme-$v'),
+                minTileHeight: 56,
+                leading: SchemeSwatch(palette(v)),
+                title: Text(label(v)),
+                trailing: v == current ? Icon(Icons.check, color: AppColors.accent) : null,
+                onTap: () => Navigator.pop(ctx, v),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null) onPick(picked);
   }
 
   Future<void> _pickDictationLocale(BuildContext context, WidgetRef ref) async {
@@ -351,4 +409,34 @@ String batterySaverHelp(BatterySaver l) {
       : '${x.inMinutes} min';
   return 'Pantalla del agente cada ${d(t.viewInterval)} como mucho, Panel ${d(t.boardDelay)} tras un cambio, buzón cada ${d(t.mailPoll)}. '
       'En segundo plano, los hosts con push se desconectan a los ${d(t.suspendAfter)}: las preguntas y permisos siguen llegando por push.';
+}
+
+/// A small card painted with a palette: its background, a surface with a
+/// line of text, and the accent, waiting and success colors.
+class SchemeSwatch extends StatelessWidget {
+  const SchemeSwatch(this.p, {super.key});
+  final AppPalette p;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget dot(Color c) => Container(width: 8, height: 8, margin: const EdgeInsets.only(right: 3), decoration: BoxDecoration(color: c, shape: BoxShape.circle));
+    return Container(
+      width: 56,
+      height: 40,
+      padding: const EdgeInsets.all(5),
+      decoration: BoxDecoration(color: p.bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: p.border)),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+        decoration: BoxDecoration(color: p.surface, borderRadius: BorderRadius.circular(5)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Container(height: 3, width: 26, color: p.text),
+            Row(children: [dot(p.accent), dot(p.waiting), dot(p.success)]),
+          ],
+        ),
+      ),
+    );
+  }
 }

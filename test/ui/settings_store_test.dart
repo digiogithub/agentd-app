@@ -31,6 +31,13 @@ void main() {
     expect(chatFontOrder.toSet(), ChatFont.values.toSet());
   });
 
+  test('color schemes round trip; unknown is the standard one', () {
+    final back = appSettingsFromJson(const AppSettings(darkScheme: DarkScheme.amoled, lightScheme: LightScheme.cream, muted: []).toJson());
+    expect((back.darkScheme, back.lightScheme), (DarkScheme.amoled, LightScheme.cream));
+    final bad = appSettingsFromJson({'darkScheme': 'neon', 'lightScheme': 3});
+    expect((bad.darkScheme, bad.lightScheme), (DarkScheme.standard, LightScheme.standard));
+  });
+
   test('battery saver round trips; unknown is low', () {
     final back = appSettingsFromJson(const AppSettings(batterySaver: BatterySaver.high, muted: []).toJson());
     expect(back.batterySaver, BatterySaver.high);

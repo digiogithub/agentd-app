@@ -70,10 +70,8 @@ class _AgentdAppState extends ConsumerState<AgentdApp>
     unawaited(_push.start());
     _links = ref.read(appLinksProvider).listen(_openLink, onError: (Object _) {});
     // First frame: nothing is built yet, so no repaint walk is needed.
-    AppColors.palette = AppPalette.resolve(
-      ref.read(settingsProvider).theme,
-      _platform,
-    );
+    final s = ref.read(settingsProvider);
+    AppColors.palette = AppPalette.resolve(s.theme, _platform, darkScheme: s.darkScheme, lightScheme: s.lightScheme);
   }
 
   @override
@@ -150,12 +148,12 @@ class _AgentdAppState extends ConsumerState<AgentdApp>
   }
 
   @override
-  void didChangePlatformBrightness() =>
-      _apply(ref.read(settingsProvider).theme);
+  void didChangePlatformBrightness() => _apply(ref.read(settingsProvider));
 
-  /// Switches to the palette for [choice]; repaints everything if it changed.
-  void _apply(ThemeChoice choice) {
-    final next = AppPalette.resolve(choice, _platform);
+  /// Switches to the palette of [s] (theme and schemes); repaints everything
+  /// if it changed.
+  void _apply(AppSettings s) {
+    final next = AppPalette.resolve(s.theme, _platform, darkScheme: s.darkScheme, lightScheme: s.lightScheme);
     if (identical(next, AppColors.palette)) return;
     setState(() => AppColors.palette = next);
     _rebuildAll(context as Element);
@@ -174,7 +172,7 @@ class _AgentdAppState extends ConsumerState<AgentdApp>
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(settingsProvider.select((s) => s.theme), (_, t) => _apply(t));
+    ref.listen(settingsProvider.select((s) => (s.theme, s.darkScheme, s.lightScheme)), (_, _) => _apply(ref.read(settingsProvider)));
     ref.listen(settingsProvider.select((s) => s.keepConnected), (_, _) => _background.settingsChanged());
     ref.listen(settingsProvider.select((s) => s.pushEnabled), (_, _) => unawaited(_push.settingsChanged()));
     ref.listen(settingsProvider.select((s) => s.batterySaver), (_, l) => ref.read(powerControlProvider).level = l);
