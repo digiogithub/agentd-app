@@ -9,10 +9,15 @@ import '../core/contracts.dart';
 import 'agentd_clients.dart';
 
 class AgentdMailRepository implements MailRepository {
-  AgentdMailRepository({required this._clients, this.poll = const Duration(seconds: 15)});
+  AgentdMailRepository({required this._clients, this._poll, this._power});
 
   final AgentdClients _clients;
-  final Duration poll;
+  final Duration? _poll;
+  final PowerControl? _power;
+
+  /// Poll interval while a screen shows the mailbox: a fixed value (tests)
+  /// or the battery saver level's.
+  Duration get poll => _poll ?? (_power ?? PowerControl()).tuning.mailPoll;
 
   final Map<String, _MailPoller> _pollers = {};
 
@@ -80,8 +85,17 @@ class _MailPoller {
   }
 
   void _start() {
-    _timer ??= Timer.periodic(repo.poll, (_) => kick());
+    if (_timer == null) _tick();
     kick();
+  }
+
+  /// One poll every [AgentdMailRepository.poll], read again each time (the
+  /// battery saver level can change).
+  void _tick() {
+    _timer = Timer(repo.poll, () {
+      kick();
+      _tick();
+    });
   }
 
   void _maybeStop() {

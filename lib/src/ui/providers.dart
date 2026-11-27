@@ -27,6 +27,14 @@ import 'screens/qr_scan_screen.dart';
 final hostsRepositoryProvider = Provider<HostsRepository>((ref) => FakeHostsRepository());
 final sessionsRepositoryProvider = Provider<SessionsRepository>((ref) => FakeSessionsRepository());
 final mailRepositoryProvider = Provider<MailRepository>((ref) => FakeMailRepository());
+
+/// Battery saver level shared with the real repositories (main.dart
+/// overrides it with AppData.power; the app sets it from the settings).
+final powerControlProvider = Provider<PowerControl>((ref) => PowerControl());
+
+/// The installed version, "1.11.7" (main.dart overrides it from the
+/// platform; empty when unknown).
+final appVersionProvider = FutureProvider<String>((ref) async => '');
 final boardRepositoryProvider = Provider<BoardRepository>((ref) => FakeBoardRepository());
 final provisionServiceProvider = Provider<ProvisionService>((ref) => FakeProvisionService());
 final devicesRepositoryProvider = Provider<DevicesRepository>((ref) => FakeDevicesRepository(ref.watch(hostsRepositoryProvider)));
@@ -119,6 +127,7 @@ class AppSettings {
     this.chatLineHeight = ChatLineHeight.normal,
     this.keepConnected = true,
     this.pushEnabled = true,
+    this.batterySaver = BatterySaver.low,
   });
 
   final bool notifyWaiting;
@@ -149,6 +158,10 @@ class AppSettings {
   /// closed.
   final bool pushEnabled;
 
+  /// How often the app asks the hosts for news, and how soon it drops the
+  /// connections of hosts that push once in the background (PowerTuning).
+  final BatterySaver batterySaver;
+
   AppSettings copyWith({
     bool? notifyWaiting,
     bool? notifyTurnDone,
@@ -163,6 +176,7 @@ class AppSettings {
     ChatLineHeight? chatLineHeight,
     bool? keepConnected,
     bool? pushEnabled,
+    BatterySaver? batterySaver,
   }) => AppSettings(
     notifyWaiting: notifyWaiting ?? this.notifyWaiting,
     notifyTurnDone: notifyTurnDone ?? this.notifyTurnDone,
@@ -177,6 +191,7 @@ class AppSettings {
     chatLineHeight: chatLineHeight ?? this.chatLineHeight,
     keepConnected: keepConnected ?? this.keepConnected,
     pushEnabled: pushEnabled ?? this.pushEnabled,
+    batterySaver: batterySaver ?? this.batterySaver,
   );
 }
 
@@ -233,6 +248,7 @@ extension AppSettingsJson on AppSettings {
     'chatLineHeight': chatLineHeight.name,
     'keepConnected': keepConnected,
     'pushEnabled': pushEnabled,
+    'batterySaver': batterySaver.name,
   };
 }
 
@@ -266,6 +282,7 @@ AppSettings appSettingsFromJson(Object? json, {AppSettings fallback = const AppS
     chatLineHeight: lineHeight,
     keepConnected: b('keepConnected', fallback.keepConnected),
     pushEnabled: b('pushEnabled', fallback.pushEnabled),
+    batterySaver: BatterySaver.values.where((l) => l.name == json['batterySaver']).firstOrNull ?? fallback.batterySaver,
   );
 }
 

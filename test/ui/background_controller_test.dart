@@ -143,6 +143,12 @@ void main() {
     expect(bridge.notes, hasLength(3));
   });
 
+  test('the battery saver level sets the time before the suspend', () {
+    expect(c.suspendAfter, const Duration(minutes: 1));
+    settings = settings.copyWith(batterySaver: BatterySaver.high);
+    expect(c.suspendAfter, PowerTuning.high.suspendAfter);
+  });
+
   test('hosts that push are disconnected after a while in the background', () async {
     await c.dispose();
     hosts = FakeHostsRepository(hosts: [_host('estudio', HostState.online), _host('vps', HostState.online), _host('casa', HostState.connecting)]);

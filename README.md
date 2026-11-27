@@ -120,6 +120,8 @@ without push: see `docs/push.md`.
 Battery: with push working, a host is disconnected after one minute in the background (questions
 and permission dialogs keep arriving by push) and connected again when the app comes back. In the
 foreground the app limits how often it asks a busy agent for its screen and the mailbox.
+Ajustes > **Ahorro de batería** (Bajo, Medio, Alto) stretches those intervals and disconnects sooner;
+the installed version is shown below it.
 
 ## Android Auto
 

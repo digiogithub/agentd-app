@@ -270,6 +270,30 @@ class SettingsScreen extends ConsumerWidget {
                   value: s.theme,
                   onChanged: (t) => n.update((x) => x.copyWith(theme: t)),
                 ),
+                const SizedBox(height: 18),
+                const SectionLabel('Ahorro de batería'),
+                const SizedBox(height: 8),
+                SegmentedControl<BatterySaver>(
+                  key: const ValueKey('battery-saver'),
+                  radio: true,
+                  height: 40,
+                  options: const [(BatterySaver.low, 'Bajo'), (BatterySaver.medium, 'Medio'), (BatterySaver.high, 'Alto')],
+                  value: s.batterySaver,
+                  onChanged: (l) => n.update((x) => x.copyWith(batterySaver: l)),
+                ),
+                const SizedBox(height: 8),
+                Text(batterySaverHelp(s.batterySaver), key: const ValueKey('battery-saver-help'), style: AppText.caption),
+                const SizedBox(height: 18),
+                Center(
+                  child: Text(
+                    switch (ref.watch(appVersionProvider).value) {
+                      final v? when v.isNotEmpty => 'agentd-app $v',
+                      _ => 'agentd-app',
+                    },
+                    key: const ValueKey('app-version'),
+                    style: AppText.caption,
+                  ),
+                ),
               ],
             ),
           ),
@@ -315,4 +339,16 @@ class SettingsScreen extends ConsumerWidget {
       await ref.read(dictationLocaleProvider.notifier).choose(picked.$1);
     }
   }
+}
+
+/// What a battery saver level does, for the settings caption.
+String batterySaverHelp(BatterySaver l) {
+  final t = PowerTuning.of(l);
+  String d(Duration x) => x.inMilliseconds < 1000
+      ? '${x.inMilliseconds} ms'
+      : x.inSeconds < 60
+      ? (x.inMilliseconds % 1000 == 0 ? '${x.inSeconds} s' : '${(x.inMilliseconds / 1000).toStringAsFixed(1).replaceAll('.', ',')} s')
+      : '${x.inMinutes} min';
+  return 'Pantalla del agente cada ${d(t.viewInterval)} como mucho, Panel ${d(t.boardDelay)} tras un cambio, buzón cada ${d(t.mailPoll)}. '
+      'En segundo plano, los hosts con push se desconectan a los ${d(t.suspendAfter)}: las preguntas y permisos siguen llegando por push.';
 }

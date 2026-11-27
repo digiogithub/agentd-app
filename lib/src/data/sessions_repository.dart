@@ -64,7 +64,8 @@ class LiveSessionsRepository implements SessionsRepository {
     MuxFactory? mux,
     this.muxPoll = const Duration(seconds: 5),
     this.refreshDebounce = const Duration(milliseconds: 150),
-    this.viewInterval = const Duration(milliseconds: 600),
+    this._viewInterval,
+    this._power,
     this.viewLines = 300,
     this.promptRetry = const Duration(seconds: 2),
     this.promptWait = const Duration(seconds: 90),
@@ -78,8 +79,12 @@ class LiveSessionsRepository implements SessionsRepository {
 
   /// Shortest time between two view requests of one open session: a busy
   /// agent changes its view many times a second, and every request is a
-  /// round trip over SSH or the relay (battery).
-  final Duration viewInterval;
+  /// round trip over SSH or the relay (battery). A fixed value (tests) wins
+  /// over the battery saver level.
+  Duration get viewInterval => _viewInterval ?? (_power ?? _defaultPower).tuning.viewInterval;
+  final Duration? _viewInterval;
+  final PowerControl? _power;
+  static final _defaultPower = PowerControl();
 
   final HostsRepository _hosts;
   final AgentdClients _clients;

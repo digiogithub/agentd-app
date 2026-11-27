@@ -59,6 +59,7 @@ class _AgentdAppState extends ConsumerState<AgentdApp>
       pushHosts: () => _push.pushHosts,
     )..start();
     _opens = _background.opens.listen(_openSession);
+    ref.read(powerControlProvider).level = ref.read(settingsProvider).batterySaver;
     _push = PushController(
       hosts: ref.read(hostsRepositoryProvider),
       push: ref.read(pushRepositoryProvider),
@@ -176,6 +177,7 @@ class _AgentdAppState extends ConsumerState<AgentdApp>
     ref.listen(settingsProvider.select((s) => s.theme), (_, t) => _apply(t));
     ref.listen(settingsProvider.select((s) => s.keepConnected), (_, _) => _background.settingsChanged());
     ref.listen(settingsProvider.select((s) => s.pushEnabled), (_, _) => unawaited(_push.settingsChanged()));
+    ref.listen(settingsProvider.select((s) => s.batterySaver), (_, l) => ref.read(powerControlProvider).level = l);
     final p = AppColors.palette;
     final dark = p.brightness == Brightness.dark;
     final theme = buildAppTheme(p);

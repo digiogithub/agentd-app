@@ -71,6 +71,10 @@ class MainActivity : FlutterActivity() {
                     stopService(Intent(this, ConnectionService::class.java))
                     result.success(null)
                 }
+                "appVersion" -> {
+                    // versionName only: split APKs add 1000 * ABI to the code.
+                    result.success(packageManager.getPackageInfo(packageName, 0).versionName ?: "")
+                }
                 "notify" -> {
                     notifyEvent(
                         call.argument<Int>("id") ?: 0,

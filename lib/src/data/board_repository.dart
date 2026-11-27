@@ -13,15 +13,19 @@ class LiveBoardRepository implements BoardRepository {
   LiveBoardRepository({
     required this._hosts,
     required this._clients,
-    this.refreshDebounce = const Duration(seconds: 1),
+    this._refreshDebounce,
+    this._power,
     this.retry = const Duration(seconds: 20),
   });
 
   final HostsRepository _hosts;
   final AgentdClients _clients;
+  final Duration? _refreshDebounce;
+  final PowerControl? _power;
 
-  /// Coalescing delay of the refreshes triggered by events.
-  final Duration refreshDebounce;
+  /// Delay of the refreshes triggered by events: a fixed value (tests) or
+  /// the battery saver level's.
+  Duration get refreshDebounce => _refreshDebounce ?? (_power ?? PowerControl()).tuning.boardDelay;
 
   /// Delay before asking again after a failed or refused board.
   final Duration retry;

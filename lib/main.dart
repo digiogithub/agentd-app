@@ -41,6 +41,8 @@ Widget buildApp({AppData? data, SettingsStore? settingsStore, AppSettings? setti
       hostsRepositoryProvider.overrideWithValue(data.hosts),
       sessionsRepositoryProvider.overrideWithValue(data.sessions),
       mailRepositoryProvider.overrideWithValue(data.mail),
+      powerControlProvider.overrideWithValue(data.power),
+      appVersionProvider.overrideWith((ref) => appVersion()),
       boardRepositoryProvider.overrideWithValue(data.board),
       devicesRepositoryProvider.overrideWithValue(data.devices),
       pushRepositoryProvider.overrideWithValue(data.push),

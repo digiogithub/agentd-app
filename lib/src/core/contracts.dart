@@ -1000,3 +1000,41 @@ abstract class ProvisionService {
 
   Stream<ProvisionEvent> install(RemoteShell shell, HostCapabilities caps, {bool agentd = true, bool hcListener = true, bool mcp = true, Set<String> clis = const {}});
 }
+
+/// Ajustes > Ahorro de batería: how often the app asks the hosts for news.
+enum BatterySaver { low, medium, high }
+
+/// Refresh pacing of one [BatterySaver] level.
+class PowerTuning {
+  const PowerTuning({required this.viewInterval, required this.boardDelay, required this.mailPoll, required this.suspendAfter});
+
+  /// Shortest time between two view requests of an open session.
+  final Duration viewInterval;
+
+  /// Delay of a board refresh after an event (not restarted by later ones).
+  final Duration boardDelay;
+
+  /// Mailbox poll while a screen shows it.
+  final Duration mailPoll;
+
+  /// Time in the background before the hosts that push are disconnected.
+  final Duration suspendAfter;
+
+  static const low = PowerTuning(viewInterval: Duration(milliseconds: 600), boardDelay: Duration(seconds: 1), mailPoll: Duration(seconds: 15), suspendAfter: Duration(minutes: 1));
+  static const medium = PowerTuning(viewInterval: Duration(milliseconds: 1500), boardDelay: Duration(seconds: 3), mailPoll: Duration(seconds: 30), suspendAfter: Duration(seconds: 15));
+  static const high = PowerTuning(viewInterval: Duration(seconds: 3), boardDelay: Duration(seconds: 6), mailPoll: Duration(seconds: 60), suspendAfter: Duration(seconds: 3));
+
+  static PowerTuning of(BatterySaver level) => switch (level) {
+    BatterySaver.low => low,
+    BatterySaver.medium => medium,
+    BatterySaver.high => high,
+  };
+}
+
+/// The current [PowerTuning], shared by the repositories that poll or
+/// throttle; the UI sets [level] from the settings.
+class PowerControl {
+  PowerControl([this.level = BatterySaver.low]);
+  BatterySaver level;
+  PowerTuning get tuning => PowerTuning.of(level);
+}

@@ -26,7 +26,7 @@ export 'shell_session.dart';
 
 /// Everything the app needs, built once at start.
 class AppData {
-  AppData({required this.hosts, required this.sessions, required this.mail, required this.board, required this.devices, required this.push, required this.provision, required this.hostKeyPrompts, required this.clients});
+  AppData({required this.hosts, required this.sessions, required this.mail, required this.board, required this.devices, required this.push, required this.provision, required this.hostKeyPrompts, required this.clients, required this.power});
 
   /// Production wiring: secure storage for keys, shared_preferences for
   /// hosts and trusted host keys, dartssh2 connections.
@@ -41,16 +41,18 @@ class AppData {
       prompts: prompts,
     );
     final clients = AgentdClients(hosts);
+    final power = PowerControl();
     return AppData(
       hosts: hosts,
-      sessions: LiveSessionsRepository(hosts: hosts, clients: clients),
-      mail: AgentdMailRepository(clients: clients),
-      board: LiveBoardRepository(hosts: hosts, clients: clients),
+      sessions: LiveSessionsRepository(hosts: hosts, clients: clients, power: power),
+      mail: AgentdMailRepository(clients: clients, power: power),
+      board: LiveBoardRepository(hosts: hosts, clients: clients, power: power),
       devices: AgentdDevicesRepository(hosts: hosts, clients: clients),
       push: AgentdPushRepository(clients: clients),
       provision: provision,
       hostKeyPrompts: prompts,
       clients: clients,
+      power: power,
     );
   }
 
@@ -63,4 +65,7 @@ class AppData {
   final ProvisionService provision;
   final HostKeyPrompts hostKeyPrompts;
   final AgentdClients clients;
+
+  /// Battery saver level read by the repositories (set from the settings).
+  final PowerControl power;
 }

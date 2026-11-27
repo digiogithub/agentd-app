@@ -1,3 +1,4 @@
+import 'package:agentd_app/src/core/contracts.dart';
 import 'package:agentd_app/src/ui/providers.dart';
 import 'package:agentd_app/src/ui/screens/mailbox_screen.dart';
 import 'package:agentd_app/src/ui/screens/settings_screen.dart';
@@ -73,6 +74,23 @@ void main() {
       await tester.tap(find.text('Sistema'));
       await tester.pump();
       expect(find.textContaining('llegará pronto'), findsNothing);
+    });
+
+    testWidgets('battery saver level and installed version at the end', (tester) async {
+      await pumpUi(tester, const Scaffold(body: SettingsScreen()), height: 1100, extraOverrides: [appVersionProvider.overrideWith((ref) async => '1.11.7')]);
+      final help = find.byKey(const ValueKey('battery-saver-help'));
+      await tester.scrollUntilVisible(help, 200, scrollable: find.byType(Scrollable).first);
+      expect((tester.widget<Text>(help)).data, contains('cada 600 ms'));
+      await tester.tap(find.text('Alto'));
+      await tester.pump();
+      final container = ProviderScope.containerOf(tester.element(help));
+      expect(container.read(settingsProvider).batterySaver, BatterySaver.high);
+      expect((tester.widget<Text>(help)).data, allOf(contains('cada 3 s'), contains('a los 3 s')));
+      await tester.tap(find.text('Medio'));
+      await tester.pump();
+      expect((tester.widget<Text>(help)).data, contains('cada 1,5 s'));
+      await tester.scrollUntilVisible(find.byKey(const ValueKey('app-version')), 200, scrollable: find.byType(Scrollable).first);
+      expect(find.text('agentd-app 1.11.7'), findsOneWidget);
     });
 
     testWidgets('chat text size and font', (tester) async {

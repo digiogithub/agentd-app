@@ -22,7 +22,7 @@ class BackgroundController {
     required this.bridge,
     required this.settings,
     Set<String> Function()? pushHosts,
-    this.suspendAfter = const Duration(minutes: 1),
+    this._suspendAfter,
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now,
        _pushHosts = pushHosts ?? (() => const {});
@@ -38,8 +38,10 @@ class BackgroundController {
   final Set<String> Function() _pushHosts;
 
   /// Time in the background before the connections of [_pushHosts] close
-  /// (a quick switch to another app keeps them).
-  final Duration suspendAfter;
+  /// (a quick switch to another app keeps them): a fixed value (tests) or
+  /// the battery saver level's.
+  Duration get suspendAfter => _suspendAfter ?? PowerTuning.of(settings().batterySaver).suspendAfter;
+  final Duration? _suspendAfter;
   Timer? _suspend;
 
   final _subs = <StreamSubscription<Object?>>[];

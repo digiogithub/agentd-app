@@ -345,7 +345,7 @@ gitignored `google-services.json` is supplied: `docs/push.md`.
 
 ## Battery (background and foreground)
 
-Changed on 2026-11-27, version 1.11.7 (José: the app drained the battery in the background over the
+Changed on 2026-11-27, version 1.11.7 (unreleased, shipped in 1.12.0) (José: the app drained the battery in the background over the
 relay; in the background it should only get the questions).
 
 - Background: a host whose daemon pushes to this device (`PushController.pushHosts`: registered with
@@ -362,8 +362,17 @@ relay; in the background it should only get the questions).
   requests); the board refresh waits 1 s and is not restarted either; the mailbox polls every 15 s
   (was 5 s) and only while a screen shows it (`inboxProvider` / `queuesProvider` are autoDispose: an
   opened chat used to keep a 5 s poll per host for the life of the app).
-- Tests: `test/ui/background_controller_test.dart` (suspend), `test/ui/push_controller_test.dart`
-  (`pushHosts`).
+- Ajustes > Ahorro de batería (1.12.0, 2026-11-27): `AppSettings.batterySaver` (low = the values
+  above, default; medium; high) picks a `PowerTuning` (contracts): view interval 0.6 / 1.5 / 3 s,
+  board delay 1 / 3 / 6 s, mailbox poll 15 / 30 / 60 s, background suspend 60 / 15 / 3 s.
+  `AppData.power` (`PowerControl`, `powerControlProvider`) is read by the sessions, board and mail
+  repositories on every use (the mail poll is a chained timer so a change applies at the next tick);
+  `AgentdApp` sets it from the setting. The car engine keeps low. Fixed durations passed to the
+  constructors (tests) win over the level.
+- The installed version shows at the end of Ajustes (`appVersionProvider`; Android channel
+  `agentd/background` method `appVersion` = versionName; empty on iOS for now).
+- Tests: `test/ui/background_controller_test.dart` (suspend, level), `test/ui/push_controller_test.dart`
+  (`pushHosts`), `test/ui/settings_store_test.dart`, `test/ui/mail_settings_test.dart` (control, version).
 
 ## Android Auto
 

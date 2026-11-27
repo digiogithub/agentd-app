@@ -1,3 +1,4 @@
+import 'package:agentd_app/src/core/contracts.dart';
 import 'package:agentd_app/src/ui/providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -28,6 +29,14 @@ void main() {
     expect(appSettingsFromJson({'chatFont': 'legible'}).chatFont, ChatFont.legible);
     expect(appSettingsFromJson({'chatLineHeight': 'huge'}).chatLineHeight, ChatLineHeight.normal);
     expect(chatFontOrder.toSet(), ChatFont.values.toSet());
+  });
+
+  test('battery saver round trips; unknown is low', () {
+    final back = appSettingsFromJson(const AppSettings(batterySaver: BatterySaver.high, muted: []).toJson());
+    expect(back.batterySaver, BatterySaver.high);
+    expect(appSettingsFromJson({'batterySaver': 'max'}).batterySaver, BatterySaver.low);
+    expect(PowerTuning.of(BatterySaver.high).viewInterval, greaterThan(PowerTuning.of(BatterySaver.medium).viewInterval));
+    expect(PowerTuning.of(BatterySaver.medium).suspendAfter, lessThan(PowerTuning.of(BatterySaver.low).suspendAfter));
   });
 
   test('broken or missing settings fall back to defaults without sample mutes', () {

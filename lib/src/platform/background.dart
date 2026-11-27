@@ -105,3 +105,13 @@ class NoopBackgroundBridge implements BackgroundBridge {
   @override
   Future<bool> requestPermission() async => false;
 }
+
+/// The installed version, "1.11.7" (Android; empty elsewhere or on
+/// failure).
+Future<String> appVersion() async {
+  try {
+    return await const MethodChannel('agentd/background').invokeMethod<String>('appVersion') ?? '';
+  } catch (_) {
+    return '';
+  }
+}
